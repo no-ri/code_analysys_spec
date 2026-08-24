@@ -682,6 +682,8 @@ Ruby / Go / シェルスクリプト等、抽出器を用意していない言�
 
 ## 8. テスト対象プロジェクトの選定
 
+**ステータス: 確定**（2026-08）。実装着手時はこのセットで始める。変更する場合は §8.1 の基準に照らして判断すること。
+
 ### 8.1 選定基準
 
 抽出器の検証には「適度な規模」だけでなく「**解決できない呼び出しが一定量含まれること**」が要る。§3.3 の `resolution` 列の分布を見るのが検証の本体であり、すべてが `resolved` になるコードでは何も測れないため。
@@ -734,7 +736,26 @@ Ruby / Go / シェルスクリプト等、抽出器を用意していない言�
 
 **§7.7（多言語混在）の検証**は、上記を1つのディレクトリに並べた合成リポジトリで行う。実際の混在プロジェクトを探すより、各言語の挙動が既知である方が差分を切り分けやすい。
 
-### 8.4 注意点
+### 8.4 取得元とライセンス
+
+すべて shallow clone で取得できる。ライセンスは clone した LICENSE / COPYING の本文を確認済み（2026-08）。
+
+| プロジェクト | 取得元 | ライセンス |
+|---|---|---|
+| cJSON | `https://github.com/DaveGamble/cJSON` | MIT |
+| tinyxml2 | `https://github.com/leethomason/tinyxml2` | zlib License |
+| cmark | `https://github.com/commonmark/cmark` | BSD-2-Clause（同梱コンポーネントに ISC / MIT、仕様・テストデータに CC-BY-SA 4.0 を含む） |
+| requests | `https://github.com/psf/requests` | Apache-2.0 |
+| commander.js | `https://github.com/tj/commander.js` | MIT |
+| FluentValidation | `https://github.com/FluentValidation/FluentValidation` | Apache-2.0 |
+| （参考）chibicc | `https://github.com/rui314/chibicc` | MIT |
+| （参考）wren | `https://github.com/wren-lang/wren` | MIT |
+
+いずれも商用利用・改変が可能な許容的ライセンス。**ただし解析対象のソースそのものを自リポジトリに取り込むことはしない**（サブモジュールか、テスト時に clone するスクリプトで対応する）。取り込むと各プロジェクトのライセンス告知義務が自リポジトリに及ぶため。
+
+cmark のテストデータが CC-BY-SA 4.0 である点は、**解析結果（ファクトデータ）を公開する場合に確認が要る**。ソースコードの解析には影響しない。
+
+### 8.5 注意点
 
 - 行数・構造の計測値は clone 時点のもの。**選定の目安であり、厳密な再現性は期待しない**
 - chibicc / wren は Makefile ビルドのため `compile_commands.json` の生成に `bear` が要る。T1 に入れなかったのはこの一手間のみが理由で、コード自体（特に chibicc は C コンパイラの実装で構造が濃い）は良い題材
