@@ -680,8 +680,14 @@ D-13（事前・事後条件）と D-14（不変条件）は、**調査対象の
 ある言語で概念が存在しない場合、`NULL` ではなく **`not_applicable`** として記録すべきです。「調べていない」「取れなかった」「そもそも存在しない」の3つは意味が全く違い、混ぜると解析結果を誤読します。
 
 ```
-resolution: resolved | unresolved | not_applicable | not_extracted
+status: resolved | unresolved | not_applicable | not_extracted
 ```
+
+**採用済み**（2026-08-25）。当初 CODE_ANALYSIS_CONCEPT.md §3.1 が持っていた `resolution` 列（`via_function_pointer` 等の理由分類）と語彙が衝突していたため、
+**`status`（状態）と `reason`（理由）の2列に分離**して両方を残す形で決着しました。
+併せて「解決できたと言っているが、どれだけ信じてよいか」を表す `confidence`（`high` / `medium` / `low`）列を追加しています。
+
+→ 決定の根拠は CODE_ANALYSIS_CONCEPT.md §3.1.1 / §3.1.2 を参照。
 
 ### ⑤ 次のステップ
 

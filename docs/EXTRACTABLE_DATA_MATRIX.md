@@ -459,7 +459,7 @@ BaseName: name, type, module_name, module_path, line, column,
 ```
 symbols:   id, kind, name, qualified_name, file,
            line, col, end_line, end_col, lang, extractor, snapshot
-calls:     caller_id, callee_id, callee_expr, resolution, file, line, col
+calls:     caller_id, callee_id, callee_expr, status, reason, confidence, file, line, col
 var_refs:  func_id, var_id, access, file, line, col
 imports:   from_file, to_module, alias, file, line
 ```
@@ -485,7 +485,7 @@ imports:   from_file, to_module, alias, file, line
 | 列 | 理由 |
 |---|---|
 | **`confidence`** | 同じ `access = 'write'` でも、Python は AST 由来（確実）、C/C++ は自前判定（推定）。信頼度が違うことをデータに残す |
-| **`resolution`** | 既定済み。Python / JS で特に重要 |
+| **`status` / `reason` / `confidence`** | 確定済み（CODE_ANALYSIS_CONCEPT.md §3.1.1、§3.1.2）。Python / JS で特に重要 |
 | **`extractor`** | 同じ言語でも Jedi 由来と scip-python 由来で精度が違う |
 | **`config`** | C/C++ と C# の条件コンパイル対応。**C# にも `#if` がある点に注意** |
 
@@ -501,7 +501,7 @@ imports:   from_file, to_module, alias, file, line
    → C# / TS は API 一発、C/C++ は全 TU 走査 + USR 突合の自前実装
 
 4. **Python / JS の呼び出しエッジは常に不完全**
-   → `resolution` の分布をモニタリングし、「解決率 60%」のような数字を可視化に出す設計にしておく
+   → `status` の分布をモニタリングし、「解決率 60%」のような数字を可視化に出す設計にしておく
 
 5. **「宣言が複数ある」問題は全言語で起きるが原因が違う**
 

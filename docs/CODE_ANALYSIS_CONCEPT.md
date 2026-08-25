@@ -103,6 +103,8 @@ AI が強いのは「文法規則の生成」「ビジターのボイラープ�
 
 ### 3.1 テーブル構成（初版）
 
+**ステータス: 確定**（2026-08-25）。§3.1.1〜§3.1.3 の3つの決定を反映済み。
+
 ```
 symbols.csv
   id              -- 安定シンボルID（§3.2）
@@ -113,6 +115,7 @@ symbols.csv
   is_definition   -- 定義か宣言か
   storage_class   -- static | extern | ...
   linkage         -- internal | external
+  confidence      -- high | medium | low（§3.1.2）
   lang            -- c | cpp | py | ts | cs
   extractor       -- 抽出器の識別子とバージョン
   snapshot        -- コミットハッシュ等
@@ -121,19 +124,67 @@ calls.csv
   caller_id
   callee_id       -- 解決できた場合のみ。できなければ空
   callee_expr     -- 元の式（"fp", "handler->on_event" 等）
-  resolution      -- resolved | via_function_pointer
-                  -- | virtual_unresolved | macro_expanded | unknown
+  status          -- resolved | unresolved | not_applicable | not_extracted
+                  -- （§3.1.1）
+  reason          -- status = unresolved のときのみ埋める。
+                  -- via_function_pointer | virtual_unresolved
+                  -- | macro_expanded | unknown
+  confidence      -- high | medium | low（§3.1.2）
   call_kind       -- direct | virtual | implicit
   file, line, col
-  snapshot
+  lang, extractor, snapshot
 
 var_refs.csv
   func_id
   var_id
   access          -- read | write | readwrite | address_of | unknown
+  status          -- resolved | unresolved | not_applicable | not_extracted
+  reason          -- status = unresolved のときのみ
+  confidence      -- high | medium | low
   file, line, col
-  snapshot
+  lang, extractor, snapshot
 ```
+
+#### 3.1.1 `status` と `reason` を分ける理由
+
+当初は `resolution` という1列に「解決できたか」と「なぜできなかったか」を混在させていたが、**この2つは粒度の異なる軸**であり、分離する。
+
+| 列 | 問い | 値 |
+|---|---|---|
+| `status` | どの状態か（事実） | `resolved` / `unresolved` / `not_applicable` / `not_extracted` |
+| `reason` | なぜ解決できなかったか（事実） | `via_function_pointer` / `virtual_unresolved` / `macro_expanded` / `unknown` |
+
+`status` の4値は「**解決できた**」「**取れなかった**」「**そもそもその言語に概念が存在しない**」「**まだ調べていない**」を区別する。この3つ（後者3値）は意味が全く違い、混ぜると解析結果を誤読する（`ANALYSIS_VIEWPOINTS.md` §3.3 ④）。
+
+分けたことで以下が成立する。
+
+- §7.3 のフィルタ原則が `WHERE status = 'resolved'` と素直に書ける
+- `reason` に値を追加しても `status` の値域が汚れないため、既存クエリが壊れない
+- 「未対応の言語だから空」（`not_extracted`）と「その言語に仮想関数が無いから空」（`not_applicable`）が区別できる
+
+#### 3.1.2 `confidence` を enum にする理由
+
+§7.4-2 が「信頼度列を最初から入れる」を必須としているため列を追加する。値域は **`high` / `medium` / `low` の enum**とし、数値（0.0〜1.0）は採らない。
+
+**理由**: libclang も Jedi も確率値を返さない。数値にすると根拠のない小数を書くことになり、§2.3 の「間違った答えが自信を持って出てくるツールは、答えが出ないツールより有害」に逆行する。enum なら「Python の動的解決だから `low`」のように、**抽出器が根拠を持って言える粒度**に一致する。
+
+`status` / `reason` / `confidence` は役割が重複しない。
+
+| 列 | 種別 |
+|---|---|
+| `status` | 解決できたか（事実） |
+| `reason` | できなかった理由（事実） |
+| `confidence` | 解決できたと言っているが、どれだけ信じてよいか（判断） |
+
+Python の `foo()` を Jedi が解決した場合は `status = resolved` かつ `confidence = low` になる。この組み合わせは頻出するはずで、`confidence` が無いと Python と C++ の解決結果が同じ重みで混ざる。
+
+#### 3.1.3 `lang` / `extractor` / `snapshot` を全テーブルに持たせる理由
+
+§7.4-4「抽出器の識別子とバージョンを記録」は再現性のための全体方針であり、`symbols` だけでは満たせない。
+
+`symbols` から JOIN で引く案は、**未解決の行**（`callee_id` が空）で対応先が無く、抽出器のバージョンだけを上げて再抽出したケースでも破綻する。冗長を承知で全テーブルに持たせる。
+
+§7.6 の L0 中間ファイルでは、この3列をメタ情報行に1回だけ書き、L1 取り込み時に各行へ展開する。**冗長になるのは L1 のみで、手書きする中間ファイル側は冗長にならない。**
 
 ### 3.2 シンボルID
 
@@ -159,17 +210,26 @@ SCIP は LSIF の後継として Sourcegraph が設計した規格で、不透�
 
 **これが自作の最大の価値。既製ツールがやってくれない部分。**
 
-`callee_id` が空でも行を残し、`callee_expr` に元の式を、`resolution` に理由を記録する。
+`callee_id` が空でも行を残し、`callee_expr` に元の式を、`status` / `reason` に状態と理由を記録する（§3.1.1）。
 
 これにより、**自分の知識の穴がどこにあるかがデータとして見える**ようになる。§2.3 で挙げた「静かな取りこぼし」という最大のリスクが、可視化できるものに変わる。
 
 ```sql
 -- 解決率のモニタリング
-SELECT resolution, COUNT(*) FROM calls GROUP BY resolution;
+SELECT status, COUNT(*) FROM calls GROUP BY status;
+
+-- 未解決の理由の内訳（なぜ解けなかったか）
+SELECT reason, COUNT(*) FROM calls
+WHERE status = 'unresolved' GROUP BY reason ORDER BY 2 DESC;
 
 -- 未解決が集中しているファイル = 要注意領域
+-- not_applicable（言語に概念が無い）を混ぜないこと
 SELECT file, COUNT(*) FROM calls
-WHERE resolution != 'resolved' GROUP BY file ORDER BY 2 DESC;
+WHERE status = 'unresolved' GROUP BY file ORDER BY 2 DESC;
+
+-- 「解決済み」と言っているが信用度が低いもの = 検証優先度が高い
+SELECT file, COUNT(*) FROM calls
+WHERE status = 'resolved' AND confidence = 'low' GROUP BY file ORDER BY 2 DESC;
 ```
 
 **原則: 抽出層では絶対に情報を捨てない。** フィルタリングは必ず下流で行う（§7.3）。
@@ -253,7 +313,7 @@ node.getType();
 
 **天井**: CFG もデータフローもない。必要になったら AST から自前で CFG を構築するか、Joern の `jssrc2cpg` に委ねる。
 
-**注意**: 型注釈のない素の JS では名前解決の精度が落ちる。`resolution` 列がここで効く。
+**注意**: 型注釈のない素の JS では名前解決の精度が落ちる。`status` / `confidence` 列（§3.1）がここで効く。
 
 ### 4.6 Python → 標準 `ast` + pyright系（2段構え）
 
@@ -499,7 +559,7 @@ L3a 理解層 (views/)          L3b 検出層 (rules/)
    「このパターンは怪しい」という知識は必ず L3b に置く。抽出器は「見たものを記録する」だけ。
 
 2. **フィルタリングは下流でのみ行う**
-   バグ検出ルールが誤検知を減らしたければ、`WHERE resolution = 'resolved'` のように**クエリ側で絞る**。抽出器で絞らない。
+   バグ検出ルールが誤検知を減らしたければ、`WHERE status = 'resolved' AND confidence = 'high'` のように**クエリ側で絞る**。抽出器で絞らない。
 
 3. **findings は別テーブル・別ライフサイクル**
    `findings.csv` は L1 のテーブルと混ぜない。ルールを消せば findings も消える、という関係を保つ。L1 は L3b の存在を知らない。
@@ -521,7 +581,7 @@ L3a 理解層 (views/)          L3b 検出層 (rules/)
 1. **位置情報は範囲で持つ** — `(file, line, col, end_line, end_col)`
    行番号だけでは、ルールの指摘箇所をエディタでハイライトできない。SARIF も範囲を要求する。
 
-2. **`resolution` / 信頼度列を最初から入れる**（§3.3）
+2. **`status` / `reason` / `confidence` 列を最初から入れる**（§3.1.1、§3.1.2）
    バグ検出ルールが「解決済みのエッジだけを使う」というフィルタを掛けられるようにする。
 
 3. **`snapshot`（コミットハッシュ）列を入れる**
@@ -602,13 +662,26 @@ facts/raw/
 
 1行目は`#`で始まるメタ情報行。そのファイル内の全レコードで共通する値(`snapshot` / `extractor` / `lang`)はここに1回だけ書き、各データ行では繰り返さない。`file`列も持たない(ファイル名自体が経路を表すため冗長)。2行目はヘッダ(列名)、3行目以降がデータ。
 
+`bar.c.symbols.tsv`:
+
 ```
 # snapshot=8f3ac21 extractor=libclang-18.1.0 lang=c
-id	kind	name	qualified_name	line	col	end_line	end_col	is_definition	storage_class	linkage
-c:@F@process#I#	function	process	process	10	1	25	1	true	external	external
+id	kind	name	qualified_name	line	col	end_line	end_col	is_definition	storage_class	linkage	confidence
+c:@F@process#I#	function	process	process	10	1	25	1	true	external	external	high
+```
+
+`bar.c.calls.tsv`（`status` が `resolved` の行では `reason` を空にする）:
+
+```
+# snapshot=8f3ac21 extractor=libclang-18.1.0 lang=c
+caller_id	callee_id	callee_expr	status	reason	confidence	call_kind	line	col
+c:@F@process#I#	c:@F@helper#	helper	resolved		high	direct	14	5
+c:@F@process#I#		hooks->on_event	unresolved	via_function_pointer	high	direct	19	5
 ```
 
 手で直すときはテキストエディタでタブ区切りの1行を編集するだけでよい。整形して見たい場合は `column -t -s $'\t' bar.c.symbols.tsv` 等で確認できる。
+
+**空値の扱い**: 該当しない列は空文字（タブが連続する）で表す。`status = resolved` の行の `reason` がこれにあたる。「空」と `not_applicable` は別物であることに注意（前者は列が不要、後者は「その言語に概念が無い」という積極的な記録）。
 
 #### L0 → L1 取り込み(増分ロード)
 
@@ -625,7 +698,7 @@ for each changed source file X:
 
 コストは変更されたファイル数に比例する。ファイル横断のクロス集計(§3.3の未解決率モニタリング等)は、取り込み後のL1(SQLite)に対してのみ行う。
 
-**注意点(§3.3との関係)**: `foo.c`のシンボルを変更しても、`bar.c`から`foo.c`を呼んでいる`calls`行の`resolution`は`bar.c`自体を再抽出しない限り古いままになりうる。これは保存形式(TSVかJSONか)を変えても消えない、依存関係追跡の問題であり、L0の出力形式とは別に、後日「変更されたシンボルを参照しているファイル一覧」を求める仕組み(依存グラフ)を検討する必要がある。現時点では対象外とする(§1「非スコープ」のインクリメンタル解析の一部)。
+**注意点(§3.3との関係)**: `foo.c`のシンボルを変更しても、`bar.c`から`foo.c`を呼んでいる`calls`行の`status` / `reason`は`bar.c`自体を再抽出しない限り古いままになりうる。これは保存形式(TSVかJSONか)を変えても消えない、依存関係追跡の問題であり、L0の出力形式とは別に、後日「変更されたシンボルを参照しているファイル一覧」を求める仕組み(依存グラフ)を検討する必要がある。現時点では対象外とする(§1「非スコープ」のインクリメンタル解析の一部)。
 
 ### 7.7 多言語混在リポジトリでの挙動（想定）
 
@@ -686,7 +759,7 @@ Ruby / Go / シェルスクリプト等、抽出器を用意していない言�
 
 ### 8.1 選定基準
 
-抽出器の検証には「適度な規模」だけでなく「**解決できない呼び出しが一定量含まれること**」が要る。§3.3 の `resolution` 列の分布を見るのが検証の本体であり、すべてが `resolved` になるコードでは何も測れないため。
+抽出器の検証には「適度な規模」だけでなく「**解決できない呼び出しが一定量含まれること**」が要る。§3.3 の `status` / `reason` 列の分布を見るのが検証の本体であり、すべてが `resolved` になるコードでは何も測れないため。
 
 1. **規模** — 5千〜2万行。数千行では未解決ケースが数個しか出ず統計にならない。10万行超は1回の試行が重くなり反復が止まる
 2. **`compile_commands.json` が出せるか**（C/C++）— §4.3 の必須前提。CMake 採用プロジェクトが圧倒的に楽
@@ -722,7 +795,7 @@ Ruby / Go / シェルスクリプト等、抽出器を用意していない言�
 | 段 | 用途 | プロジェクト | 理由 |
 |---|---|---|---|
 | **T0 スモーク** | 毎回。数秒で終わること | **cJSON**（C, 5.4k） | CMake が無設定で通る。関数ポインタ（`malloc_fn` / `free_fn`）が `CJSON_CDECL` マクロ経由で宣言されており、**マクロと関数ポインタが絡む最小ケース**として理想的 |
-| **T1 本命** | 機能追加のたび | **cmark**（C, 17.9k） | 規模・構造とも中庸。関数形式マクロ 62、`#if` 54、間接呼び出し 61 と、`resolution` の各値が一通り出る見込み。CMake ○、C言語のみで依存が薄い |
+| **T1 本命** | 機能追加のたび | **cmark**（C, 17.9k） | 規模・構造とも中庸。関数形式マクロ 62、`#if` 54、間接呼び出し 61 と、`reason` の各値が一通り出る見込み。CMake ○、C言語のみで依存が薄い |
 | | | **tinyxml2**（C++, 5.5k） | 仮想関数 88 個に対し間接呼び出し 0。**仮想ディスパッチの解決だけを切り出して検証できる**。cmark と役割が重複しない |
 | **T2 ストレス** | Phase 完了時など随時 | SQLite / Lua / Redis 等 | 性能と「静かな取りこぼし」（§2.3）の確認用。日常のテストには使わない |
 
@@ -730,7 +803,7 @@ Ruby / Go / シェルスクリプト等、抽出器を用意していない言�
 
 | 言語 | プロジェクト | 選定理由 |
 |---|---|---|
-| Python | **requests**（6.9k） | 型注釈が薄い実コード。`resolution` が Python でどこまで機能するかの現実的な試金石 |
+| Python | **requests**（6.9k） | 型注釈が薄い実コード。`status` / `confidence` が Python でどこまで機能するかの現実的な試金石 |
 | JS | **commander.js**（6.5k） | 素の JS。§4.5 の「型注釈のない JS で精度が落ちる」を実測できる |
 | C# | **FluentValidation**（13.0k） | `.sln` があり `MSBuildWorkspace` でそのまま開ける。ジェネリクスとラムダを多用しており `IOperation` の検証に向く |
 
@@ -775,7 +848,7 @@ cmark のテストデータが CC-BY-SA 4.0 である点は、**解析結果（�
 ### Phase 1: 最小データセット（C/C++）
 - [ ] `symbols.csv` / `calls.csv` / `var_refs.csv` を libclang で生成
 - [ ] SQLite に投入
-- [ ] `resolution` 列の分布を確認 → 解決率をモニタリング
+- [ ] `status` / `reason` / `confidence` 列の分布を確認 → 解決率をモニタリング
 - [ ] Mermaid または自作 HTML でコールグラフを出力
 - [ ] （§7.6）L0出力をファイル単位のTSVに分割し、`file`列でのdelete+insertによる増分取り込みを試す
 
@@ -785,7 +858,7 @@ cmark のテストデータが CC-BY-SA 4.0 である点は、**解析結果（�
   - → **ここで将来のデータフロー拡張に耐えるか分かる**
 
 ### Phase 3: 多言語展開
-- [ ] TypeScript（ts-morph）— 型注釈の薄い言語で ID と `resolution` が機能するか
+- [ ] TypeScript（ts-morph）— 型注釈の薄い言語で ID と `status` / `confidence` が機能するか
 - [ ] Python（ast + Jedi / scip-python）— 最難関。ここが通ればスキーマは十分に汎用
 - [ ] （§7.7）多言語混在リポジトリに投入し、想定挙動と実動作の差を確認する
 
