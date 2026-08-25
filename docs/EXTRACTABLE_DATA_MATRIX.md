@@ -458,11 +458,18 @@ BaseName: name, type, module_name, module_path, line, column,
 
 ```
 symbols:   id, kind, name, qualified_name, file,
-           line, col, end_line, end_col, lang, extractor, snapshot
-calls:     caller_id, callee_id, callee_expr, status, reason, confidence, file, line, col
-var_refs:  func_id, var_id, access, file, line, col
+           line, col, end_line, end_col, is_definition,
+           confidence, lang, extractor, snapshot
+calls:     caller_id, callee_id, callee_expr,
+           status, reason, confidence, call_kind,
+           file, line, col, lang, extractor, snapshot
+var_refs:  func_id, var_id, access,
+           status, reason, confidence,
+           file, line, col, lang, extractor, snapshot
 imports:   from_file, to_module, alias, file, line
 ```
+
+> **正はこれではない。** テーブル定義の正本は CODE_ANALYSIS_CONCEPT.md §3.1。本節は「調査結果としてこの形に落ちる」ことを示すための再掲であり、差異が出た場合は §3.1 に従うこと。`imports` は §3.1 の初版テーブルには含まれていない（未決事項。OPEN_DECISIONS.md 参照）。
 
 `access`（read / write / readwrite）は全言語で表現可能だが、**導出方法と信頼度が言語ごとに異なる**ため、後述の `confidence` 列とセットで扱う。
 
@@ -482,10 +489,12 @@ imports:   from_file, to_module, alias, file, line
 
 調査結果から、以下は**初版から必要**と判断:
 
+いずれも **確定済み**（CODE_ANALYSIS_CONCEPT.md §3.1、2026-08-25）。
+
 | 列 | 理由 |
 |---|---|
-| **`confidence`** | 同じ `access = 'write'` でも、Python は AST 由来（確実）、C/C++ は自前判定（推定）。信頼度が違うことをデータに残す |
-| **`status` / `reason` / `confidence`** | 確定済み（CODE_ANALYSIS_CONCEPT.md §3.1.1、§3.1.2）。Python / JS で特に重要 |
+| **`status` / `reason`** | 「解決できたか」と「なぜできなかったか」を分けて記録する（§3.1.1）。Python / JS で特に重要 |
+| **`confidence`** | 同じ `access = 'write'` でも、Python は AST 由来（確実）、C/C++ は自前判定（推定）。信頼度が違うことをデータに残す（§3.1.2） |
 | **`extractor`** | 同じ言語でも Jedi 由来と scip-python 由来で精度が違う |
 | **`config`** | C/C++ と C# の条件コンパイル対応。**C# にも `#if` がある点に注意** |
 
@@ -516,11 +525,11 @@ imports:   from_file, to_module, alias, file, line
 
 ### 4.5 推奨する着手順の再確認
 
-CODE_ANALYSIS_CONCEPT.md §8 の Phase 2 で C# を置いた判断は、本調査で裏付けられました。
+> **更新（2026-08-25）**: 当初は「Phase 1 = C/C++、Phase 2 = C#」としていたが、**順序を入れ替えて C# を Phase 1 とした**。理由は CODE_ANALYSIS_CONCEPT.md §10.1。本節の分析はその判断を支持する内容だったため、結論だけを差し替える。
 
-**C# が最も多くの情報を出せるため、スキーマの穴を最も早く発見できます。** C/C++ だけでスキーマを固めると、CFG・データフロー・リテラル値・参照検索という4方向で後から作り直しが発生します。
+**C# が最も多くの情報を出せるため、スキーマの穴を最も早く発見できます。** C/C++ だけでスキーマを固めると、CFG・データフロー・リテラル値・参照検索という4方向で後から作り直しが発生します。**この理由により C# を先行させます。**
 
-一方で **C/C++ が本命**である以上、Phase 1 で C/C++ を先に触って現実的な制約（`compile_commands.json`、リテラル値の欠如、参照検索の自前実装）を体感しておくべきです。この順序は変えない。
+一方で **C/C++ が本命**（CODE_ANALYSIS_CONCEPT.md §1.1）である点は変わりません。C/C++ 固有の現実的な制約（`compile_commands.json`、リテラル値の欠如、参照検索の自前実装）は Phase 2 で体感することになります。**順序を変えただけで、最終的な目標は変わっていません。**
 
 ---
 
