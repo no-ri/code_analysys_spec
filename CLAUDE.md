@@ -15,6 +15,7 @@
 | `docs/EXTRACTABLE_DATA_MATRIX.md` | 言語別「ツールで**取れるか**」（ツールの能力） |
 | `docs/ANALYSIS_VIEWPOINTS.md` | 言語別「その**概念が存在するか**」（言語仕様） |
 | `docs/OPEN_DECISIONS.md` | 未決事項リスト |
+| `tools/check-env.{sh,ps1}` | 実行環境の確認スクリプト（Linux/WSL・Windows）。判定根拠は構想 §9.3 |
 
 `EXTRACTABLE_DATA_MATRIX.md`（現実）と `ANALYSIS_VIEWPOINTS.md`（理想）を突き合わせて
 `CODE_ANALYSIS_CONCEPT.md` のスキーマを確定する、という関係になっている。

@@ -979,44 +979,106 @@ CLI では人間向けに整形して表示し、GUI ではこれをパースし
 
 ### 9.3 必要なインストール
 
-Phase ごとに段階的に増える。**入れていないランタイムがあっても、他言語の解析は完走する**（§7.7）。C/C++ だけ見るなら Python + libclang だけで完結する。
+**ステータス: 確定**（2026-08-25、実測に基づく訂正版）
+
+Phase ごとに段階的に増える。**入れていないランタイムがあっても、他言語の解析は完走する**（§7.7）。
+
+#### 前提の明示
+
+C/C++ の抽出には、役割の異なる3種類のツールが必要になる。**これらは互いに代替できない**。
+
+| 役割 | ツール | いつ動くか |
+|---|---|---|
+| ビルド情報の生成 | **cmake**（+ Cコンパイラ） | 解析の**前**。`compile_commands.json` を作る（§4.3） |
+| ヘッダの供給 | **clang** / **libc 開発ヘッダ** | パース時に `#include` を解決するため |
+| パース本体 | **libclang**（pip） | 解析本体 |
 
 #### Phase 0〜1（C/C++）
 
 | 対象 | 要否 | 備考 |
 |---|---|---|
-| **Python 3.9+** | 必須 | オーケストレータと C/C++ 抽出器 |
-| **`pip install libclang`** | 必須 | **ネイティブ `libclang.so` を同梱**（実測: v18.1.1、約62MB）。LLVM の別途インストールは不要で、§4.3 の「バインディングと `libclang.so` のバージョンを一致させること」も自動的に満たされる |
+| **Python** | 必須 | 下限は §9.3.1 参照 |
+| **`pip install libclang`** | 必須 | 依存パッケージゼロ、`Requires-Python` 指定なし（実測）。ネイティブ `libclang.so` を同梱（v18.1.1、約62MB） |
+| **clang** | **必須** | **Clang 組み込みヘッダ（`stddef.h` 等）の供給元**。§9.3.2 参照 |
+| **gcc + libc 開発ヘッダ** | 必須 | `stdio.h` 等のシステムヘッダの供給元。cmake の configure にも必要 |
+| **cmake** | 必須 | 解析対象の `compile_commands.json` 生成用（§8） |
 | **Git** | 必須 | `snapshot` 列（§3.4.2） |
-| CMake | 必須 | **解析対象側**の要件。cJSON / cmark / tinyxml2 の `compile_commands.json` 生成用（§8） |
-| C/C++ コンパイラ | 必須 | 同上。CMake の configure が通るために必要 |
-| ~~SQLite~~ | **不要** | **Python 本体に同梱**。`sqlite3` コマンドは中身を手で覗きたいときだけの任意ツール |
-| ~~LLVM / Clang 本体~~ | **不要** | 上記 pip パッケージが同梱するため |
+| ~~SQLite~~ | **不要** | **Python 本体に同梱**（実測）。`sqlite3` コマンドは中身を手で覗きたいときだけの任意ツール |
 | bear | 不要 | Makefile プロジェクト用。T1 に chibicc / wren を選んでいないため（§8.5） |
 
-**Phase 1 で新規に入れるのは実質 `pip install libclang` だけ。**
+##### 9.3.1 Python のバージョン下限
+
+実測した要件は以下の通り。
+
+| パッケージ | `Requires-Python` |
+|---|---|
+| libclang 18.1.1 | **指定なし**（依存パッケージもゼロ） |
+| jedi 0.20.0 | **>= 3.10** |
+
+- **Phase 1 のみ**なら libclang 側に制約が無い。実質的な下限は `ast` の `end_lineno`（終了位置。`EXTRACTABLE_DATA_MATRIX.md` §2.7）が入った **3.8**
+- **Phase 3 まで見込む**なら jedi の要求で **3.10 以上**
+
+**決定: 3.10 以上に統一する。** 後から上げ直すより最初から揃える方が安い。
+
+##### 9.3.2 clang が必須である理由（実測）
+
+`pip install libclang` が同梱するのは **`libclang.so` のみ**で、**Clang の組み込みヘッダは含まれない**。パッケージ内を検索しても `stddef.h` は存在しなかった。
+
+このため `#include` を含む実在の C コードはそのままではパースできない。
+
+```
+#include <stdio.h> を含むファイルを pip 版 libclang でパース
+→ 致命的エラー: 'stddef.h' file not found
+```
+
+**回避策**（実測で解決を確認）: システム clang のリソースディレクトリを渡す。
+
+```python
+res = subprocess.check_output(['clang', '-print-resource-dir'], text=True).strip()
+tu = index.parse(path, args=['-I' + res + '/include'])
+# → 致命的エラー 0 件。printf が USR c:@F@printf として解決される
+```
+
+したがって **clang のインストールは必須**であり、抽出器はこの `-print-resource-dir` の引き渡しを標準で行う必要がある。
+
+> **注意**: この処理を忘れると、エラーにはならず**解析結果が静かに痩せる**（一部の型やマクロが解決されない）。§2.3 の「静かな取りこぼし」そのものなので、抽出器は起動時に `stddef.h` が解決できるかを自己診断すべきである。
 
 #### Phase 2（C#）
 
 | 対象 | 要否 | 備考 |
 |---|---|---|
-| **.NET SDK 8.0+** | 必須 | Roslyn は .NET ランタイム内でしか動かない |
-| NuGet パッケージ | 自動 | `Microsoft.CodeAnalysis.CSharp.Workspaces` / `Microsoft.Build.Locator`。`dotnet restore` で取得 |
+| **.NET SDK 8.0+** | 必須 | Roslyn は .NET ランタイム内でしか動かない。**ランタイムのみ（`dotnet-runtime`）では不可**。`restore` / `build` に SDK が要る |
+| NuGet パッケージ | **自動** | `Microsoft.CodeAnalysis.CSharp.Workspaces` / `Microsoft.Build.Locator`。`dotnet restore` が nuget.org から自動取得するため手動インストールは不要 |
 
-#### Phase 3（TypeScript / JavaScript、Python）
+**条件**: NuGet の自動取得には**ネットワーク接続が必要**。オフライン環境では事前にキャッシュを用意するかローカルフィードを立てる。
+
+**要実測（Phase 2）**: `MSBuildWorkspace.OpenSolutionAsync()`（§4.4）で解析対象の `.sln` を開く際、**解析対象側の依存復元**も必要になる場合がある。参照が解決できないと Roslyn のシンボル解決が不完全になり `confidence` が下がる。
+
+#### Phase 3（Python、TypeScript / JavaScript）
+
+**Python 解析**
+
+| 対象 | 要否 | 備考 |
+|---|---|---|
+| `ast` / `symtable` | 標準 | **追加インストール不要**。構造の抽出（`symbols`）はこれだけで完結する（実測: 関数定義・呼び出し位置・スコープを取得できた） |
+| **`pip install jedi`** | 必須 | 名前解決用。これが無いと `calls` の `callee_id` が埋まらない（実測: `full_name` と参照検索の取得を確認） |
+| Node.js | **不要** | jedi は純 Python。**scip-python を選んだ場合のみ** Node が要る（pyright ベースのため） |
+
+jedi の依存は `parso` の1つのみ（実測）。
+
+**TypeScript / JavaScript 解析**
 
 | 対象 | 要否 | 備考 |
 |---|---|---|
 | **Node.js 18+** | 必須 | ts-morph は Node ランタイム内でしか動かない |
 | npm パッケージ | 自動 | `ts-morph`。`npm install` で取得 |
-| **`pip install jedi`** | 必須 | Python の名前解決（§4.6）。scip-python を選ぶ場合は Node も必要 |
 
 #### Phase 4（深掘り・必要になったら）
 
 | 対象 | 用途 |
 |---|---|
 | LLVM ツールチェイン（`opt` / `llvm-as`） | LLVM IR 経由の CFG 取得（§6） |
-| LLVM 開発ヘッダ + C++ コンパイラ | LibTooling で `clang-cfg-extract` を書く場合（§6）。**ここだけは本格的な LLVM 環境が要る** |
+| LLVM 開発ヘッダ + C++ コンパイラ | LibTooling で `clang-cfg-extract` を書く場合（§6）。**ここだけは本格的な LLVM 開発環境が要る** |
 
 #### Phase 5（バグ検出）
 
@@ -1028,6 +1090,8 @@ Phase ごとに段階的に増える。**入れていないランタイムがあ
 #### まとめ
 
 フル構成では **Python / .NET / Node の3ランタイム**が必要になる。§4 のツール選定（各言語のコンパイラ本体を使う）から必然的に導かれる帰結であり、回避手段は無い。ただし段階的に導入でき、未導入のランタイムがあっても他言語の解析は止まらない。
+
+環境の確認には `tools/check-env.sh`（Linux / WSL）および `tools/check-env.ps1`（Windows）を用いる。
 
 
 ---
