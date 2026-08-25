@@ -5,8 +5,10 @@
 
 | ファイル | 対象 | 実行方法 |
 |---|---|---|
-| `check-env.sh` | Linux / WSL | `bash tools/check-env.sh` |
-| `check-env.ps1` | Windows | `powershell -ExecutionPolicy Bypass -File tools\check-env.ps1` |
+| `check-env.sh` | Linux / WSL | `bash tools/check-env.sh [--nuget]` |
+| `check-env.ps1` | Windows | `powershell -ExecutionPolicy Bypass -File tools\check-env.ps1 [-NuGet]` |
+
+**Phase 1 は C#**（§10.1 で C/C++ と順序を入れ替えた）。`dotnet` / `git` / `python3` が揃っていれば始められる。
 
 ## 見方
 
@@ -18,13 +20,20 @@
 
 終了コードは NG の件数（0 なら Phase 1 を開始できる）。
 
+## NuGet の実復元テスト
+
+`--nuget` / `-NuGet` を付けると、一時プロジェクトを作って Roslyn パッケージを実際に `dotnet restore` する。
+数十秒かかるため既定では実行しない。**フィード設定を見るだけでは疎通は分からない**ので、
+社内プロキシ環境などで確実を期すときに使う（§9.3.2）。
+
 ## 単なる有無確認ではない項目
 
 コマンドの存在確認だけでは分からない、実際に動くかどうかを確認している。
 
-- **Clang 組み込みヘッダ** — `clang -print-resource-dir` の下に `stddef.h` があるか（§9.3.2）
+- **Clang 組み込みヘッダ** — `clang -print-resource-dir` の下に `stddef.h` があるか（§9.3.4）
 - **実パース通し確認** — `#include <stdio.h>` を含むファイルを libclang で実際にパースし、致命的エラーが出ないか
-- **compile_commands.json 生成** — 小さな CMake プロジェクトを実際に configure して生成されるか（§4.3）
+- **compile_commands.json 生成** — 小さな CMake プロジェクトを実際に configure して生成されるか（§4.3、Phase 2 用）
+- **NuGet フィード設定** — `nuget.org` が有効なフィードとして登録されているか（§9.3.2）
 
 ## Windows 固有の注意
 

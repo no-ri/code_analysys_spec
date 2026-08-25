@@ -985,7 +985,7 @@ Phase ごとに段階的に増える。**入れていないランタイムがあ
 
 #### 前提の明示
 
-C/C++ の抽出には、役割の異なる3種類のツールが必要になる。**これらは互いに代替できない**。
+C/C++（Phase 2）の抽出には、役割の異なる3種類のツールが必要になる。**これらは互いに代替できない**。C# （Phase 1）にはいずれも不要。
 
 | 役割 | ツール | いつ動くか |
 |---|---|---|
@@ -993,20 +993,7 @@ C/C++ の抽出には、役割の異なる3種類のツールが必要になる�
 | ヘッダの供給 | **clang** / **libc 開発ヘッダ** | パース時に `#include` を解決するため |
 | パース本体 | **libclang**（pip） | 解析本体 |
 
-#### Phase 0〜1（C/C++）
-
-| 対象 | 要否 | 備考 |
-|---|---|---|
-| **Python** | 必須 | 下限は §9.3.1 参照 |
-| **`pip install libclang`** | 必須 | 依存パッケージゼロ、`Requires-Python` 指定なし（実測）。ネイティブ `libclang.so` を同梱（v18.1.1、約62MB） |
-| **clang** | **必須** | **Clang 組み込みヘッダ（`stddef.h` 等）の供給元**。§9.3.2 参照 |
-| **gcc + libc 開発ヘッダ** | 必須 | `stdio.h` 等のシステムヘッダの供給元。cmake の configure にも必要 |
-| **cmake** | 必須 | 解析対象の `compile_commands.json` 生成用（§8） |
-| **Git** | 必須 | `snapshot` 列（§3.4.2） |
-| ~~SQLite~~ | **不要** | **Python 本体に同梱**（実測）。`sqlite3` コマンドは中身を手で覗きたいときだけの任意ツール |
-| bear | 不要 | Makefile プロジェクト用。T1 に chibicc / wren を選んでいないため（§8.5） |
-
-##### 9.3.1 Python のバージョン下限
+#### 9.3.1 Python のバージョン下限（全 Phase 共通）
 
 実測した要件は以下の通り。
 
@@ -1020,7 +1007,89 @@ C/C++ の抽出には、役割の異なる3種類のツールが必要になる�
 
 **決定: 3.10 以上に統一する。** 後から上げ直すより最初から揃える方が安い。
 
-##### 9.3.2 clang が必須である理由（実測）
+#### Phase 1（C#）— 最小構成
+
+| 対象 | 要否 | 備考 |
+|---|---|---|
+| **.NET SDK 8.0+** | 必須 | Roslyn は .NET ランタイム内でしか動かない。**ランタイムのみ（`dotnet-runtime`）では不可**。`restore` / `build` に SDK が要る |
+| **Git** | 必須 | `snapshot` 列（§3.4.2） |
+| **Python 3.10+** | 必須 | TSV → SQLite のローダー（§9.1）。Windows は python.org 版、Ubuntu は標準同梱 |
+| NuGet パッケージ | **自動** | `Microsoft.CodeAnalysis.CSharp.Workspaces` / `Microsoft.Build.Locator`。`dotnet restore` が自動取得する。ただし §9.3.2 の確認が要る |
+| ~~clang / gcc / cmake~~ | **不要** | C/C++ 固有の要件。C# には `compile_commands.json` の概念が無い |
+| ~~libclang~~ | **不要** | 同上 |
+
+**C# だけなら、これだけで Phase 1 を始められる。** C/C++ で必要だったビルド情報の生成（cmake）とヘッダの供給（clang / libc）が丸ごと不要になる。
+
+##### 9.3.2 NuGet が取得できるかの確認
+
+**「`dotnet` が入っている」ことと「NuGet パッケージを取得できる」ことは別**である。社内プロキシ、ファイアウォール、プライベートフィード設定などで復元だけが失敗するケースがある。
+
+**段階1: 設定されているフィードを見る**
+
+```
+dotnet nuget list source
+```
+
+`nuget.org [Enabled]` が出ていれば設定上は取得可能。社内フィードのみが登録されている場合は、そのフィードに Roslyn パッケージがあるかを確認する。
+
+**段階2: 実際に復元してみる（これが決定的）**
+
+設定を見るだけでは疎通は分からない。小さなプロジェクトで実際に試す。
+
+```
+dotnet new classlib -o nugetcheck
+cd nugetcheck
+dotnet add package Microsoft.CodeAnalysis.CSharp.Workspaces
+dotnet restore
+```
+
+成功すれば Phase 1 に必要な NuGet 取得は確実に動く。`tools/check-env.ps1 -NuGet` はこの手順を自動で実行する（数十秒かかるためオプション扱い）。
+
+**失敗した場合**:
+
+| 症状 | 対処 |
+|---|---|
+| タイムアウト・接続エラー | プロキシ設定。`HTTP_PROXY` / `HTTPS_PROXY` 環境変数、または `%APPDATA%\NuGet\NuGet.Config` の `<config>` セクション |
+| 401 / 403 | プライベートフィードの認証。`dotnet nuget update source` で資格情報を設定 |
+| パッケージが見つからない | 社内フィードのみが有効で nuget.org が無効化されている。`dotnet nuget add source https://api.nuget.org/v3/index.json -n nuget.org` |
+
+オフライン環境では、疎通のある端末で `dotnet restore --packages ./localpkgs` を実行してパッケージをコピーし、`--source` で参照する。
+
+##### 9.3.3 解析対象の C# が Windows / WSL どちらで扱えるか
+
+**インストールとは別に、解析対象側の条件がある。**
+
+```
+（対象プロジェクトで）
+grep -r "TargetFramework" --include=*.csproj -h . | sort -u
+```
+
+| `TargetFramework` の値 | WSL | Windows |
+|---|:--:|:--:|
+| `net8.0` / `net6.0` などクロスプラットフォーム | ○ | ○ |
+| `net8.0-windows`（WPF / WinForms） | ✕ | ○ |
+| `net48` など .NET Framework 4.x | ✕ | ○ |
+
+Linux 版 .NET SDK は .NET Framework をターゲットにしたプロジェクトを復元・ロードできないため、`MSBuildWorkspace.OpenSolutionAsync()` が失敗する。
+
+**さらに、解析の前に対象プロジェクト側で `dotnet restore` を通しておく必要がある。** 参照が解決できないと Roslyn のシンボル解決が不完全になる。
+
+**ロードできない場合のフォールバック**: プロジェクトが開けなくても、`CSharpSyntaxTree.ParseText()` で個別の `.cs` ファイルを構文レベルでパースできる。`symbols` は取れるが `calls` の解決精度は落ちる。この状況こそ §3.1.2 の `confidence` 列が想定するもので、**「プロジェクトをロードできた = `high`」「構文パースのみ = `low`」**と記録する。
+
+#### Phase 2（C/C++）
+
+| 対象 | 要否 | 備考 |
+|---|---|---|
+| **Python** | 必須 | 下限は §9.3.1 参照 |
+| **`pip install libclang`** | 必須 | 依存パッケージゼロ、`Requires-Python` 指定なし（実測）。ネイティブ `libclang.so` を同梱（v18.1.1、約62MB） |
+| **clang** | **必須** | **Clang 組み込みヘッダ（`stddef.h` 等）の供給元**。§9.3.4 参照 |
+| **gcc + libc 開発ヘッダ** | 必須 | `stdio.h` 等のシステムヘッダの供給元。cmake の configure にも必要 |
+| **cmake** | 必須 | 解析対象の `compile_commands.json` 生成用（§8） |
+| **Git** | 必須 | `snapshot` 列（§3.4.2） |
+| ~~SQLite~~ | **不要** | **Python 本体に同梱**（実測）。`sqlite3` コマンドは中身を手で覗きたいときだけの任意ツール |
+| bear | 不要 | Makefile プロジェクト用。T1 に chibicc / wren を選んでいないため（§8.5） |
+
+##### 9.3.4 clang が必須である理由（実測）
 
 `pip install libclang` が同梱するのは **`libclang.so` のみ**で、**Clang の組み込みヘッダは含まれない**。パッケージ内を検索しても `stddef.h` は存在しなかった。
 
@@ -1042,17 +1111,6 @@ tu = index.parse(path, args=['-I' + res + '/include'])
 したがって **clang のインストールは必須**であり、抽出器はこの `-print-resource-dir` の引き渡しを標準で行う必要がある。
 
 > **注意**: この処理を忘れると、エラーにはならず**解析結果が静かに痩せる**（一部の型やマクロが解決されない）。§2.3 の「静かな取りこぼし」そのものなので、抽出器は起動時に `stddef.h` が解決できるかを自己診断すべきである。
-
-#### Phase 2（C#）
-
-| 対象 | 要否 | 備考 |
-|---|---|---|
-| **.NET SDK 8.0+** | 必須 | Roslyn は .NET ランタイム内でしか動かない。**ランタイムのみ（`dotnet-runtime`）では不可**。`restore` / `build` に SDK が要る |
-| NuGet パッケージ | **自動** | `Microsoft.CodeAnalysis.CSharp.Workspaces` / `Microsoft.Build.Locator`。`dotnet restore` が nuget.org から自動取得するため手動インストールは不要 |
-
-**条件**: NuGet の自動取得には**ネットワーク接続が必要**。オフライン環境では事前にキャッシュを用意するかローカルフィードを立てる。
-
-**要実測（Phase 2）**: `MSBuildWorkspace.OpenSolutionAsync()`（§4.4）で解析対象の `.sln` を開く際、**解析対象側の依存復元**も必要になる場合がある。参照が解決できないと Roslyn のシンボル解決が不完全になり `confidence` が下がる。
 
 #### Phase 3（Python、TypeScript / JavaScript）
 
@@ -1098,35 +1156,66 @@ jedi の依存は `parso` の1つのみ（実測）。
 
 ## 10. ロードマップ
 
+**Phase 1 を C# に変更した**（2026-08-25）。理由は §10.1。
+
+### 10.1 なぜ C# を先にするか
+
+当初は C/C++ を Phase 1 に置いていたが、以下の理由で C# を先行させる。
+
+1. **§4.4 の戦術メモが元々これを推奨していた** — 「アーキテクチャ検証を早く回したいなら、最初に C# で試すのも手。数時間でデータフローまで含むデータセットが出るので、スキーマ設計の妥当性を先に確かめられる」
+2. **C# だけが CFG とデータフローを公式APIとして持つ**（`EXTRACTABLE_DATA_MATRIX.md` §2.6）。将来の拡張に耐えるスキーマかを**最初に**検証できる
+3. **前提条件が圧倒的に少ない** — `compile_commands.json` が不要（§4.3）、libclang のヘッダ問題（§9.3.4）が無関係、シンボルIDは `GetDocumentationCommentId()` が既製（§3.2）
+4. **実コードで使用感を得られる** — 手元に解析したい C# コードがある
+
+**C/C++ が最優先という §1.1 の方針は変えない。** 順序を入れ替えるだけで、最終的な目標は同じ。C/C++ は前提条件（ビルド情報の取得）の準備に時間がかかるため、その間にスキーマを固める。
+
 ### Phase 0: 検証（数日）
-- [ ] 対象コードで `compile_commands.json` が出せるか確認
-- [ ] libclang（Python）で 1 ファイルの AST を歩き、USR が取れることを確認
-- [ ] clangd の Call Hierarchy を触ってベースラインを把握
+
+- [ ] 解析対象の `.csproj` の `TargetFramework` を確認（§9.3.3 の判定）
+- [ ] 対象プロジェクトで `dotnet restore` が通ることを確認
+- [ ] `MSBuildWorkspace.OpenSolutionAsync()` で対象の `.sln` が開けることを確認
+- [ ] `ISymbol.GetDocumentationCommentId()` が取れることを1メソッドで確認
 - [ ] （任意）Understand の無料トライアルで「理想の画面」を確定させる
 
-### Phase 1: 最小データセット（C/C++）
-- [ ] `symbols.csv` / `calls.csv` / `var_refs.csv` を libclang で生成
-- [ ] SQLite に投入
-- [ ] `status` / `reason` / `confidence` 列の分布を確認 → 解決率をモニタリング
-- [ ] Mermaid または自作 HTML でコールグラフを出力
-- [ ] （§7.6）L0出力をファイル単位のTSVに分割し、`file`列でのdelete+insertによる増分取り込みを試す
+### Phase 1: 最小データセット ＋ スキーマ検証（C#）
 
-### Phase 2: スキーマ検証（C#）
-- [ ] Roslyn で同じスキーマに落とせるか確認
+**当初の Phase 1（最小データセット）と Phase 2（スキーマ検証）を統合する。** C# は CFG・データフローまで一度に出せるため、分ける意味が薄い。
+
+- [ ] `symbols` / `calls` / `var_refs` を Roslyn で生成（§3.1）
+- [ ] §7.6 の TSV としてファイル単位に出力
+- [ ] Python ローダーで SQLite に投入（§3.4.1）
+- [ ] `status` / `reason` / `confidence` 列の分布を確認 → 解決率をモニタリング（§3.3）
 - [ ] `AnalyzeDataFlow` の結果を追加列として入れてもスキーマが壊れないか検証
   - → **ここで将来のデータフロー拡張に耐えるか分かる**
+- [ ] `file` 列での delete+insert による増分取り込みを試す（§7.6）
+- [ ] Mermaid または自作 HTML でコールグラフを出力
+- [ ] SCIP マッピング規則（§3.2.1）が C# の DocumentationCommentId から機械的に作れるか確認
+
+**検証対象**: 手元の実コード ＋ FluentValidation（§8.3）
+
+### Phase 2: C/C++（libclang）
+
+- [ ] 対象コードで `compile_commands.json` が出せるか確認
+- [ ] libclang（Python）で 1 ファイルの AST を歩き、USR が取れることを確認
+- [ ] **clang の resource-dir 引き渡し**が効いているか自己診断（§9.3.4）
+- [ ] Phase 1 で固めたスキーマにそのまま落とせるか確認
+- [ ] `reason` の各値（`via_function_pointer` / `macro_expanded` 等）が実際に出るか（§8.3 の cJSON / cmark / tinyxml2）
+- [ ] clangd の Call Hierarchy を触ってベースラインを把握
 
 ### Phase 3: 多言語展開
+
 - [ ] TypeScript（ts-morph）— 型注釈の薄い言語で ID と `status` / `confidence` が機能するか
 - [ ] Python（ast + Jedi / scip-python）— 最難関。ここが通ればスキーマは十分に汎用
 - [ ] （§7.7）多言語混在リポジトリに投入し、想定挙動と実動作の差を確認する
 
 ### Phase 4: 深掘り（必要になったら）
+
 - [ ] `clang -ast-dump=json` で AST 情報を拡充
 - [ ] LLVM IR + `dot-cfg` で CFG を試す（C++ 不要）
 - [ ] 足りなければ LibTooling で `clang-cfg-extract` を書く
 
 ### Phase 5: バグ検出（未確定）
+
 - [ ] Clang Static Analyzer の SARIF を `findings.csv` に取り込む（③）
 - [ ] プロジェクト固有ルールを 1〜2個 書いてみる（②）
 - [ ] §7.3 の層分離ルールを守れているか自己点検

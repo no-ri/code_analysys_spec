@@ -1,6 +1,8 @@
 ﻿# 解析ツールの実行環境を確認する（Windows / PowerShell 用）
 # 判定内容の根拠は docs/CODE_ANALYSIS_CONCEPT.md §9.3
 # 使い方: powershell -ExecutionPolicy Bypass -File tools\check-env.ps1
+#        -NuGet を付けると NuGet の実復元テストも行う（数十秒かかる）
+param([switch]$NuGet)
 
 $script:ok = 0; $script:ng = 0; $script:optMissing = 0
 
@@ -28,7 +30,11 @@ Write-Host " 解析ツール実行環境チェック (Windows)"
 Write-Host (" {0}" -f [System.Environment]::OSVersion.VersionString)
 Write-Host "==================================================="
 
-Write-Head "Phase 1: C/C++（最小構成）"
+Write-Head "Phase 1: C#（最小構成）"
+Test-Tool 'dotnet' 'dotnet' 'Phase 1'
+Test-Tool 'git'    'git'    'Phase 1'
+
+Write-Head "Phase 2: C/C++（Phase 1 のみなら不要）"
 # Windows の Python は python / py の2系統がある
 $pyCmd = $null
 foreach ($cand in @('python', 'py')) {
@@ -39,14 +45,13 @@ if ($pyCmd) {
     Write-Host ("  [OK] {0,-14} {1,-40} {2}" -f 'python', $pv, (Get-Command $pyCmd).Source) -ForegroundColor Green
     $script:ok++
 } else {
-    Write-Host ("  [NG] {0,-14} 未インストール（全Phase で必要）" -f 'python') -ForegroundColor Red
+    Write-Host ("  [NG] {0,-14} 未インストール（全Phase で必要。TSV→SQLite ローダー）" -f 'python') -ForegroundColor Red
     $script:ng++
 }
-Test-Tool 'clang' 'clang' 'Phase 1'
-Test-Tool 'cmake' 'cmake' 'Phase 1'
-Test-Tool 'git'   'git'   'Phase 1'
+Test-Tool 'clang' 'clang' 'Phase 2' -Optional
+Test-Tool 'cmake' 'cmake' 'Phase 2' -Optional
 
-Write-Head "C コンパイラ（cmake の configure に必要）"
+Write-Head "C コンパイラ（Phase 2 用。cmake の configure に必要）"
 # Windows では MSVC(cl.exe) か MinGW(gcc) のいずれか
 $hasCompiler = $false
 foreach ($cc in @('cl', 'gcc', 'clang-cl')) {
@@ -56,13 +61,10 @@ foreach ($cc in @('cl', 'gcc', 'clang-cl')) {
     }
 }
 if (-not $hasCompiler) {
-    Write-Host "  [NG] C コンパイラ未検出（cl.exe / gcc / clang-cl のいずれかが必要）" -ForegroundColor Red
+    Write-Host "  [--] C コンパイラ未検出（Phase 2 で cl.exe / gcc / clang-cl のいずれかが必要）" -ForegroundColor Yellow
     Write-Host "       ※ cl.exe は「Developer PowerShell for VS」から実行しないと PATH に出ません" -ForegroundColor Yellow
-    $script:ng++
+    $script:optMissing++
 }
-
-Write-Head "Phase 2: C#（Phase 1 のみなら不要）"
-Test-Tool 'dotnet' 'dotnet' 'Phase 2' -Optional
 
 Write-Head "Phase 3: TypeScript / JavaScript（Phase 1 のみなら不要）"
 Test-Tool 'node' 'node' 'Phase 3' -Optional
@@ -73,6 +75,36 @@ Test-Tool 'sqlite3' 'sqlite3' 'DBを手で覗く用。Python同梱版がある�
 Test-Tool 'ninja'   'ninja'   'compile_commands.json 生成に推奨（下記参照）' -Optional
 
 Write-Head "詳細チェック"
+
+# NuGet が取得できるか（§9.3.2）
+if (Get-Command dotnet -ErrorAction SilentlyContinue) {
+    $srcOut = (& dotnet nuget list source 2>&1 | Out-String)
+    if ($srcOut -match 'nuget\.org' -and $srcOut -match '\[Enabled\]') {
+        Write-Host "  [OK] NuGet フィード設定に nuget.org が有効で登録されている" -ForegroundColor Green
+        $script:ok++
+    } else {
+        Write-Host "  [要確認] nuget.org が有効なフィードとして見つからない（社内フィードのみ？）" -ForegroundColor Yellow
+        Write-Host "           dotnet nuget list source で確認してください" -ForegroundColor Yellow
+    }
+
+    if ($NuGet) {
+        Write-Host "  ... NuGet 実復元テスト中（数十秒かかります）" -ForegroundColor Gray
+        $tmp = Join-Path $env:TEMP ("nugetchk_" + [guid]::NewGuid().ToString('N'))
+        & dotnet new classlib -o $tmp *> $null
+        & dotnet add $tmp package Microsoft.CodeAnalysis.CSharp.Workspaces *> $null
+        & dotnet restore $tmp *> $null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "  [OK] Roslyn パッケージの復元に成功（NuGet 取得可）" -ForegroundColor Green
+            $script:ok++
+        } else {
+            Write-Host "  [NG] Roslyn パッケージの復元に失敗。プロキシ / 認証 / フィードを確認（§9.3.2）" -ForegroundColor Red
+            $script:ng++
+        }
+        Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
+    } else {
+        Write-Host "  [--] NuGet 実復元テストは未実行（-NuGet を付けると実行）" -ForegroundColor Yellow
+    }
+}
 
 if ($pyCmd) {
     # Python バージョン（§9.3.1: 3.10 以上に統一）
@@ -101,7 +133,7 @@ if ($pyCmd) {
     }
 }
 
-# Clang 組み込みヘッダ（§9.3.2 の要点）
+# Clang 組み込みヘッダ（§9.3.4 の要点）
 if (Get-Command clang -ErrorAction SilentlyContinue) {
     $res = (& clang -print-resource-dir 2>$null)
     if ($res -and (Test-Path (Join-Path $res 'include\stddef.h'))) {
@@ -111,7 +143,7 @@ if (Get-Command clang -ErrorAction SilentlyContinue) {
     }
 }
 
-# 実パース通し確認（§9.3.2 の自己診断に相当）
+# 実パース通し確認（§9.3.4 の自己診断に相当）
 if ($pyCmd -and (Get-Command clang -ErrorAction SilentlyContinue)) {
     & $pyCmd -c "import clang.cindex" 2>$null
     if ($LASTEXITCODE -eq 0) {
@@ -164,7 +196,7 @@ Write-Host ""
 Write-Host "==================================================="
 Write-Host (" 必須: OK {0} 件 / NG {1} 件   任意で未導入: {2} 件" -f $script:ok, $script:ng, $script:optMissing)
 if ($script:ng -eq 0) {
-    Write-Host " → Phase 1（C/C++）を始められる状態です" -ForegroundColor Green
+    Write-Host " → Phase 1（C#）を始められる状態です" -ForegroundColor Green
 } else {
     Write-Host " → 上の [NG] を解消してください（§9.3 参照）" -ForegroundColor Red
 }
