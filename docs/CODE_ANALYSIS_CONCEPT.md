@@ -1011,7 +1011,7 @@ C/C++（Phase 2）の抽出には、役割の異なる3種類のツールが必�
 
 | 対象 | 要否 | 備考 |
 |---|---|---|
-| **.NET SDK 8.0+** | 必須 | Roslyn は .NET ランタイム内でしか動かない。**ランタイムのみ（`dotnet-runtime`）では不可**。`restore` / `build` に SDK が要る |
+| **.NET SDK 8.0+** | 必須 | Roslyn は .NET ランタイム内でしか動かない。**ランタイムのみでは不可**。§9.3.2 の「SDK の実在確認」を必ず行うこと |
 | **Git** | 必須 | `snapshot` 列（§3.4.2） |
 | **Python 3.10+** | 必須 | TSV → SQLite のローダー（§9.1）。Windows は python.org 版、Ubuntu は標準同梱 |
 | NuGet パッケージ | **自動** | `Microsoft.CodeAnalysis.CSharp.Workspaces` / `Microsoft.Build.Locator`。`dotnet restore` が自動取得する。ただし §9.3.2 の確認が要る |
@@ -1020,7 +1020,29 @@ C/C++（Phase 2）の抽出には、役割の異なる3種類のツールが必�
 
 **C# だけなら、これだけで Phase 1 を始められる。** C/C++ で必要だったビルド情報の生成（cmake）とヘッダの供給（clang / libc）が丸ごと不要になる。
 
-##### 9.3.2 NuGet が取得できるかの確認
+##### 9.3.2 .NET SDK の実在確認と NuGet の取得可否
+
+**先に確認すべき落とし穴: `dotnet` コマンドがあっても SDK があるとは限らない。**
+
+`dotnet.exe` はランタイム単体のインストールや Visual Studio 同梱の共有ホストでも配置される。コマンドの存在確認だけでは不十分で、次のように SDK の実体を見る。
+
+```
+dotnet --list-sdks
+```
+
+1行も出なければ SDK は入っていない（`dotnet nuget` 等の SDK コマンドは `No .NET SDKs were found` で失敗する）。
+
+**紛らわしい別物**:
+
+| 名称 | 実体 | この用途で使えるか |
+|---|---|---|
+| **.NET SDK**（8.0 / 9.0 など） | かつての .NET Core SDK。`dotnet build` / `dotnet restore` を提供 | **これが必要** |
+| .NET Framework 4.x SDK / Targeting Pack | Windows 専用の旧フレームワーク向け開発資材 | **代わりにならない**。インストール済みアプリ一覧に「4.5.1」等と出ていても SDK 要件は満たさない |
+| .NET Runtime / ASP.NET Core Runtime | 実行専用 | 不可。`dotnet.exe` は入るがビルド・復元ができない |
+
+導入は https://dotnet.microsoft.com/download から .NET SDK 8.0（LTS）。**既存の .NET Framework とはサイドバイサイドで共存**し、既存アプリに影響しない。
+
+###### NuGet が取得できるかの確認
 
 **「`dotnet` が入っている」ことと「NuGet パッケージを取得できる」ことは別**である。社内プロキシ、ファイアウォール、プライベートフィード設定などで復元だけが失敗するケースがある。
 

@@ -31,7 +31,31 @@ Write-Host (" {0}" -f [System.Environment]::OSVersion.VersionString)
 Write-Host "==================================================="
 
 Write-Head "Phase 1: C#（最小構成）"
-Test-Tool 'dotnet' 'dotnet' 'Phase 1'
+
+# dotnet.exe の存在だけでは不十分。ランタイムのみのインストールでも dotnet.exe は入る。
+# Roslyn のビルド・復元には SDK が要るため --list-sdks で実体を確認する（§9.3.2）
+$dn = Get-Command dotnet -ErrorAction SilentlyContinue
+if (-not $dn) {
+    Write-Host ("  [NG] {0,-14} 未インストール（Phase 1 で必要）" -f 'dotnet') -ForegroundColor Red
+    $script:ng++
+} else {
+    $sdks = @(& dotnet --list-sdks 2>&1 | Where-Object { $_ -match '^\d+\.\d+\.\d+' })
+    if ($sdks.Count -gt 0) {
+        Write-Host ("  [OK] {0,-14} SDK {1,-35} {2}" -f 'dotnet', ($sdks[-1] -split ' ')[0], $dn.Source) -ForegroundColor Green
+        $script:ok++
+        Write-Host ("       導入済み SDK: {0}" -f (($sdks | ForEach-Object { ($_ -split ' ')[0] }) -join ', ')) -ForegroundColor Gray
+    } else {
+        Write-Host ("  [NG] {0,-14} dotnet.exe はあるが .NET SDK が無い" -f 'dotnet') -ForegroundColor Red
+        Write-Host "       ※ ランタイムのみ、または Visual Studio 同梱の共有ホストだけの状態です" -ForegroundColor Yellow
+        Write-Host "       ※ 「.NET Framework 4.x SDK」は別物で、これの代わりにはなりません（§9.3.2）" -ForegroundColor Yellow
+        Write-Host "       → https://dotnet.microsoft.com/download から .NET SDK 8.0 を導入" -ForegroundColor Yellow
+        $script:ng++
+        $rts = @(& dotnet --list-runtimes 2>&1 | Where-Object { $_ -match '^Microsoft\.' })
+        if ($rts.Count -gt 0) {
+            Write-Host ("       参考: 導入済みランタイム {0} 件" -f $rts.Count) -ForegroundColor Gray
+        }
+    }
+}
 Test-Tool 'git'    'git'    'Phase 1'
 
 Write-Head "Phase 2: C/C++（Phase 1 のみなら不要）"
@@ -77,7 +101,8 @@ Test-Tool 'ninja'   'ninja'   'compile_commands.json 生成に推奨（下記参
 Write-Head "詳細チェック"
 
 # NuGet が取得できるか（§9.3.2）
-if (Get-Command dotnet -ErrorAction SilentlyContinue) {
+if ((Get-Command dotnet -ErrorAction SilentlyContinue) -and
+    (@(& dotnet --list-sdks 2>&1 | Where-Object { $_ -match '^\d+\.\d+\.\d+' }).Count -gt 0)) {
     $srcOut = (& dotnet nuget list source 2>&1 | Out-String)
     if ($srcOut -match 'nuget\.org' -and $srcOut -match '\[Enabled\]') {
         Write-Host "  [OK] NuGet フィード設定に nuget.org が有効で登録されている" -ForegroundColor Green

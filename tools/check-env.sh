@@ -33,7 +33,22 @@ grep -qi microsoft /proc/version 2>/dev/null && echo " ※ WSL 環境として�
 echo "==================================================="
 
 hdr "Phase 1: C#（最小構成）"
-chk "dotnet"   dotnet   "Phase 1"  "echo SDK $(dotnet --version 2>/dev/null)"
+
+# dotnet の存在だけでは不十分。ランタイムのみでも dotnet は入るため
+# --list-sdks で SDK の実体を確認する（§9.3.2）
+if ! command -v dotnet >/dev/null 2>&1; then
+  printf '  \033[31m[NG]\033[0m %-14s %s\n' "dotnet" "未インストール（Phase 1 で必要）"; ng=$((ng+1))
+else
+  sdks=$(dotnet --list-sdks 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]+' || true)
+  if [ -n "$sdks" ]; then
+    printf '  \033[32m[OK]\033[0m %-14s SDK %-35s %s\n' "dotnet" \
+      "$(echo "$sdks" | tail -1 | cut -d' ' -f1)" "$(command -v dotnet)"; ok=$((ok+1))
+  else
+    printf '  \033[31m[NG]\033[0m %-14s %s\n' "dotnet" "dotnet はあるが .NET SDK が無い（ランタイムのみ）"
+    printf '       ※ 「.NET Framework 4.x SDK」は別物で代わりになりません（§9.3.2）\n'
+    ng=$((ng+1))
+  fi
+fi
 chk "git"      git      "Phase 1"  "git --version"
 chk "python3"  python3  "全Phase（TSV→SQLite ローダー）"  "python3 --version"
 
@@ -54,7 +69,7 @@ chk "bear"     bear     "Makefile プロジェクトを対象にする場合" "b
 hdr "詳細チェック"
 
 # NuGet が取得できるか（§9.3.2）
-if command -v dotnet >/dev/null 2>&1; then
+if command -v dotnet >/dev/null 2>&1 && dotnet --list-sdks 2>/dev/null | grep -qE "^[0-9]+\.[0-9]+\.[0-9]+"; then
   src=$(dotnet nuget list source 2>&1)
   if echo "$src" | grep -q 'nuget\.org' && echo "$src" | grep -q '\[Enabled\]'; then
     printf '  \033[32m[OK]\033[0m NuGet フィード設定に nuget.org が有効で登録されている\n'; ok=$((ok+1))
