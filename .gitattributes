@@ -1,0 +1,9 @@
+# PowerShell スクリプトは Windows 用。CRLF で取り出す。
+# 中身は UTF-8 BOM 付き（BOM が無いと PowerShell 5.1 が CP932 として読み、
+# 日本語コメント・文字列が壊れて構文エラーになる）
+*.ps1 text eol=crlf
+
+# シェルスクリプトは LF 固定。CRLF になると bash が \r を解釈できず失敗する
+*.sh  text eol=lf
+
+*.md  text

@@ -1,4 +1,4 @@
-# 解析ツールの実行環境を確認する（Windows / PowerShell 用）
+﻿# 解析ツールの実行環境を確認する（Windows / PowerShell 用）
 # 判定内容の根拠は docs/CODE_ANALYSIS_CONCEPT.md §9.3
 # 使い方: powershell -ExecutionPolicy Bypass -File tools\check-env.ps1
 
