@@ -7,6 +7,11 @@
 |---|---|---|
 | `check-env.sh` | Linux / WSL | `bash tools/check-env.sh [--nuget]` |
 | `check-env.ps1` | Windows | `powershell -ExecutionPolicy Bypass -File tools\check-env.ps1 [-NuGet]` |
+| `measure-resolvability.py` | 簡易版の検討（E-3） | 下記「解決可能性の測定」 |
+| `measure-csharp-receivers.py` | 同上（C# の追加測定） | 同上 |
+
+> `check-env.*` は**フル版**用（§9.3）。`measure-*.py` は**簡易版**の検討で使った測定スクリプトで、
+> 前提が違う（ビルドを一切必要としない）。混同しないこと。
 
 **Phase 1 は C#**（§10.1 で C/C++ と順序を入れ替えた）。`dotnet` / `git` / `python3` が揃っていれば始められる。
 
@@ -40,3 +45,29 @@
 - **`cl.exe` は「Developer PowerShell for VS」から実行しないと PATH に現れない**。通常の PowerShell で C コンパイラが未検出になった場合は、そちらから再実行すること
 - **`CMAKE_EXPORT_COMPILE_COMMANDS` は Visual Studio ジェネレータでは機能しない**とされる。スクリプトは ninja があれば `-G Ninja` を使う。**この挙動は Windows 実機で未検証**
 - Python は `python` と `py` の2系統があるため、両方を探索する
+
+
+## 解決可能性の測定（簡易版の検討用）
+
+`docs/OPEN_DECISIONS.md` の E-3 に載せた実測値を再現するためのスクリプト。
+**tree-sitter の構文木だけ**を入力とし、ビルドは一切行わない（＝軸2 = ゼロの条件）。
+
+```sh
+python3 -m venv .venv
+.venv/bin/pip install tree-sitter tree-sitter-language-pack
+
+mkdir targets && cd targets
+for r in DaveGamble/cJSON commonmark/cmark leethomason/tinyxml2 \
+         psf/requests tj/commander.js FluentValidation/FluentValidation; do
+    git clone --depth 1 "https://github.com/$r" "$(basename $r)"
+done
+cd ..
+
+.venv/bin/python tools/measure-resolvability.py
+.venv/bin/python tools/measure-csharp-receivers.py
+```
+
+対象は §8.3 の推奨セット。`targets/` は **リポジトリに取り込まない**（§8.4 の方針）。
+
+**この測定の限界**: 呼び出しを「その形なら解けるはず」で分類したものであり、
+**正解データとの突合はしていない**。的中率の検証は別途必要（E-3 の「要実測」）。
