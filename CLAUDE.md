@@ -13,6 +13,9 @@
 
 ## 作業開始時に必ず読むもの
 
+**`docs/HANDOFF.md`** — 引き継ぎ資料。セッションを跨いだ直後は**まずこれを読む**。
+経緯・決定事項・次に議論することが単独で完結してまとまっている。
+
 **`docs/OPEN_DECISIONS.md`** — 未決事項リスト。何がまだ決まっていないかが集約されている。
 作業の前にこれを参照し、決定したものは「決定事項」へ移して本体文書にも反映すること。
 
@@ -23,6 +26,7 @@
 | `docs/CODE_ANALYSIS_CONCEPT.md` | 全体構想。スキーマ・ツール選定・層分離・ロードマップ |
 | `docs/EXTRACTABLE_DATA_MATRIX.md` | 言語別「ツールで**取れるか**」（ツールの能力） |
 | `docs/ANALYSIS_VIEWPOINTS.md` | 言語別「その**概念が存在するか**」（言語仕様） |
+| `docs/HANDOFF.md` | 引き継ぎ資料。セッション再開時の入口 |
 | `docs/OPEN_DECISIONS.md` | 未決事項リスト |
 | `tools/check-env.{sh,ps1}` | 実行環境の確認スクリプト（Linux/WSL・Windows）。判定根拠は構想 §9.3 |
 
