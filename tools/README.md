@@ -9,6 +9,7 @@
 | `check-env.ps1` | Windows | `powershell -ExecutionPolicy Bypass -File tools\check-env.ps1 [-NuGet]` |
 | `measure-resolvability.py` | 簡易版の検討（E-3） | 下記「解決可能性の測定」 |
 | `measure-csharp-receivers.py` | 同上（C# の追加測定） | 同上 |
+| `emit-generic-schema.py` | 簡易版の検討（E-1） | 同上 |
 
 > `check-env.*` は**フル版**用（§9.3）。`measure-*.py` は**簡易版**の検討で使った測定スクリプトで、
 > 前提が違う（ビルドを一切必要としない）。混同しないこと。
@@ -71,3 +72,8 @@ cd ..
 
 **この測定の限界**: 呼び出しを「その形なら解けるはず」で分類したものであり、
 **正解データとの突合はしていない**。的中率の検証は別途必要（E-3 の「要実測」）。
+
+`emit-generic-schema.py` は **C と C# を同じ列に出せるか**を確かめるためのもの（E-1）。
+設計検証用の使い捨てであり、実装の雛形ではない。
+既知の未対応（C# の file-scoped namespace、シグネチャ無しの ID 衝突）は
+**問題を可視化するために意図的に残してある**。
