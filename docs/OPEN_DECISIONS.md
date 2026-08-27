@@ -273,6 +273,54 @@ FluentValidation は `namespace FluentValidation;`（C# 10 以降の file-scoped
 
 **doc の担い手は言語で違う。** C / C# ではコメントだが、**Python の docstring はコメントではなく文字列リテラル**（関数本体の最初の式）。`comments` テーブルは「コメント構文」ではなく「**人が書いた説明**」を入れる器として定義し、Python の docstring も同じテーブルに `kind = doc` で入れる。
 
+#### ★ 他言語で空く軸の先行確認（2026-08-26）
+
+**初期対象は C + C# のまま変えない**が、**列の定義**にだけ影響する軸が他言語にある。列はあとから変えるとデータの作り直しになる（A-3 と同じ構造）ので、**「そういう形がある」ことだけ先に確認**した。抽出器の実装は第2段でよい。
+
+##### 実測: 3つの軸が空いている
+
+| 軸 | C | C# | JS | Python | C+C# でカバー |
+|---|---:|---:|---:|---:|---|
+| **無名関数の中の呼び出し** | 0.0% | **9.1%** | **31.3%** | 0.0% | **部分的** |
+| **doc を持つ定義**（docstring 含む） | 34.2%（comment） | 49.8%（comment） | — | **65.0%（文字列リテラル）** | **×** |
+| **visibility の決まり方** | 宣言の修飾子 | 宣言の修飾子 | **修飾子型14 + リスト型3 の混在** | 慣習（`_foo`）+ `__all__` | **×** |
+
+（requests はモジュール docstring も 19 ファイル中 15（79%）が持つ。comment ノード 532 件には **docstring は一切含まれない**。）
+
+##### 軸1: 無名関数 — **C# で既に 9.1%。JS では 31.3%**
+
+C# の `RuleFor(x => x.Surname)` のようなラムダの中にも呼び出しがある。**C だけを見ていたら 0% なので存在にすら気づかない。**
+
+**設計判断**: 無名関数を `symbols` に登録すると **ID を位置ベースにするしかなく、B-4 が退けた「不安定な識別子」になる**。
+
+> **採る案**: 無名関数は `symbols` に登録しない。`refs.src_id` は**囲む名前つき関数**にする。ただし `refs` に **`via_lambda`**（またはネスト深さ）を持たせ、「ラムダ内からの呼び出し」と分かるようにする。
+> ID の不安定さを避けつつ情報も失わない。JS の 31.3% も「この関数の中のコールバックから呼ばれている」として残る。
+
+##### 軸2: doc の担い手 — Python は**コメントではない**
+
+requests の定義の **65.0%** が docstring を持つが、**`comment` ノードには一切入らない**（文字列リテラル）。
+
+> **採る案**: `comments` テーブルに **`source_kind`** 列（`comment` / `string_literal`）を持たせる。テーブルは「コメント構文」ではなく「**人が書いた説明**」の器として定義する（E-1 で既に方針として書いたものを、列として具体化）。
+
+##### 軸3: visibility の由来 — 3種類ある
+
+C も C# も**宣言に修飾子が付く**形しかない。他言語には別の形がある。
+
+| 由来 | 例 | `confidence` |
+|---|---|---|
+| `declaration` | C の `static`/`extern`、C# の `public`、JS の `export const` | `high` |
+| `export_list` | JS の `export { A, B }`、Python の `__all__` | `high`（ただし**宣言箇所とは別の場所を読む必要がある**） |
+| `convention` | Python の `_foo`、Go の先頭大文字 | **`medium` / `low`** |
+
+**commander.js は同じファイル内に修飾子型14箇所とリスト型3箇所が混在していた。** 「言語ごとにどちらか」ではなく「**同じ言語に両方ある**」。
+
+> **採る案**: `symbols` に **`visibility_source`** 列（`declaration` / `export_list` / `convention` / `linkage`）を持たせる。C と C# は常に `declaration`（または `linkage`）で `confidence = high`。慣習型が来たときに `confidence` を下げられる。
+
+##### 今やらないこと
+
+Go / Rust / Java は上記3軸の**亜種**にしかならない見込み（Go の先頭大文字＝`convention`、Rust の `pub`＝`declaration`、`mod`＝`container` の変種）。**第2段でよい。**
+各言語の抽出器の設計も第2段。**今回は列定義への反映のみ。**
+
 #### 最小の出力（提案・訂正版）
 
 **4テーブル**（L1、SQLite）:
@@ -280,9 +328,11 @@ FluentValidation は `namespace FluentValidation;`（C# 10 以降の file-scoped
 | テーブル | 内容 |
 |---|---|
 | `files` | パス、`lang`、行数、コメント行数、**`parse_errors`**（ERROR ノード数）、git メトリクス |
-| `symbols` | `id` / `kind` / `name` / `container_id` / 位置 / `visibility` / `branch_count` / `confidence` |
-| `refs` | `src_id` / `dst_id` / `dst_expr` / `kind` / 位置 / `status` / `reason` / `confidence` |
-| **`comments`** | `file` / 位置 / `kind`（`doc` / `file_header` / `inline` / `block`）/ `attached_id` / `marker` / `text` / `confidence` |
+| `symbols` | `id` / `kind` / `name` / `container_id` / 位置 / `visibility` / **`visibility_source`** / `branch_count` / `confidence` |
+| `refs` | `src_id` / `dst_id` / `dst_expr` / `kind` / 位置 / `status` / `reason` / `confidence` / **`via_lambda`** |
+| **`comments`** | `file` / 位置 / `kind`（`doc` / `file_header` / `inline` / `block`）/ **`source_kind`**（`comment` / `string_literal`）/ `attached_id` / `marker` / `text` / `confidence` |
+
+**太字の3列は他言語で空く軸への備え**（上記「他言語で空く軸の先行確認」）。C と C# では `visibility_source` は常に `declaration` / `linkage`、`source_kind` は常に `comment` になるが、**列を後から足すとデータの作り直しになる**ため初版から持つ。
 
 **5レポート**（L3a）:
 
