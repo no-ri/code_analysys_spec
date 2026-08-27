@@ -47,11 +47,14 @@ E 群の決定を文書に落とす過程で埋まっていない**列定義の�
 
 | ファイル | 役割 |
 |---|---|
+| **`docs/SCHEMA.md`** | **L1 の列定義の正本。**他はここを参照する（DDL は実行して検証済み） |
+| `docs/SCHEMA_INDEX.md` | 列ごとの決定の追跡表。`SCHEMA.md` の入力 |
 | `docs/HANDOFF.md` | 引き継ぎ資料。セッション再開時の入口 |
 | `docs/OPEN_DECISIONS.md` | 未決事項リスト ＋ 決定の記録 |
 | `docs/CODE_ANALYSIS_CONCEPT.md` | 両版の共通土台。§2.3（原則）／§3（スキーマ）／§7.3（層分離）／§7.6（L0・増分）／§8（テスト対象） |
 | `docs/ANALYSIS_VIEWPOINTS.md` | 言語別「その**概念が存在するか**」（言語仕様）。ツール非依存なので陳腐化しない |
 | `tools/measure-*.py` / `emit-generic-schema.py` | 簡易版の実測スクリプト。数字の出典 |
+| `tools/schema-check/verify_schema.py` | `SCHEMA.md` の DDL を実行して検証する |
 
 **退避したもの**（フル版を再開するときに戻る）
 
