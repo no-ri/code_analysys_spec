@@ -42,17 +42,27 @@ E 群の決定を文書に落とす過程で埋まっていない**列定義の�
 
 ## 文書構成
 
+**フル版でのみ使うものは `docs/full-version/` と `tools/full-version/` へ退避した（2026-08-27）。**
+下表は**いま使うもの**だけ。
+
 | ファイル | 役割 |
 |---|---|
-| `docs/CODE_ANALYSIS_CONCEPT.md` | 全体構想。スキーマ・ツール選定・層分離・ロードマップ |
-| `docs/EXTRACTABLE_DATA_MATRIX.md` | 言語別「ツールで**取れるか**」（ツールの能力） |
-| `docs/ANALYSIS_VIEWPOINTS.md` | 言語別「その**概念が存在するか**」（言語仕様） |
 | `docs/HANDOFF.md` | 引き継ぎ資料。セッション再開時の入口 |
-| `docs/OPEN_DECISIONS.md` | 未決事項リスト |
-| `tools/check-env.{sh,ps1}` | 実行環境の確認スクリプト（Linux/WSL・Windows）。判定根拠は構想 §9.3 |
+| `docs/OPEN_DECISIONS.md` | 未決事項リスト ＋ 決定の記録 |
+| `docs/CODE_ANALYSIS_CONCEPT.md` | 両版の共通土台。§2.3（原則）／§3（スキーマ）／§7.3（層分離）／§7.6（L0・増分）／§8（テスト対象） |
+| `docs/ANALYSIS_VIEWPOINTS.md` | 言語別「その**概念が存在するか**」（言語仕様）。ツール非依存なので陳腐化しない |
+| `tools/measure-*.py` / `emit-generic-schema.py` | 簡易版の実測スクリプト。数字の出典 |
 
-`EXTRACTABLE_DATA_MATRIX.md`（現実）と `ANALYSIS_VIEWPOINTS.md`（理想）を突き合わせて
-`CODE_ANALYSIS_CONCEPT.md` のスキーマを確定する、という関係になっている。
+**退避したもの**（フル版を再開するときに戻る）
+
+| ファイル | 中身 |
+|---|---|
+| `docs/full-version/FULL_VERSION_PLAN.md` | 構想 §4.2〜§4.6（言語別ツール）／§5（ライセンス）／§6（深掘り）／§9.3（インストール要件）／§10（ロードマップ）。**節番号は据え置き** |
+| `docs/full-version/EXTRACTABLE_DATA_MATRIX.md` | 言語別「ツールで**取れるか**」。libclang / Roslyn / ts-morph / Jedi の能力調査 |
+| `tools/full-version/check-env.{sh,ps1}` | フル版の環境確認スクリプト（判定根拠は §9.3） |
+
+`full-version/EXTRACTABLE_DATA_MATRIX.md`（現実）と `ANALYSIS_VIEWPOINTS.md`（理想）を突き合わせる作業（C-1）は**中断中**。
+フル版を再開するときの宿題として残っている。
 
 ## 執筆上の約束
 

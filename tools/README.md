@@ -5,14 +5,14 @@
 
 | ファイル | 対象 | 実行方法 |
 |---|---|---|
-| `check-env.sh` | Linux / WSL | `bash tools/check-env.sh [--nuget]` |
-| `check-env.ps1` | Windows | `powershell -ExecutionPolicy Bypass -File tools\check-env.ps1 [-NuGet]` |
+| `full-version/check-env.sh` | Linux / WSL（**フル版用**） | `bash tools/full-version/check-env.sh [--nuget]` |
+| `full-version/check-env.ps1` | Windows（**フル版用**） | `powershell -ExecutionPolicy Bypass -File tools\full-version\check-env.ps1 [-NuGet]` |
 | `measure-resolvability.py` | 簡易版の検討（E-3） | 下記「解決可能性の測定」 |
 | `measure-csharp-receivers.py` | 同上（C# の追加測定） | 同上 |
 | `emit-generic-schema.py` | 簡易版の検討（E-1） | 同上 |
 | `measure-improvements.py` | 同上（改良の効果測定） | 同上 |
 
-> `check-env.*` は**フル版**用（§9.3）。`measure-*.py` は**簡易版**の検討で使った測定スクリプトで、
+> `check-env.*` は**フル版**用（§9.3）。**2026-08-27 に `tools/full-version/` へ退避した。**`measure-*.py` は**簡易版**の検討で使った測定スクリプトで、
 > 前提が違う（ビルドを一切必要としない）。混同しないこと。
 
 **Phase 1 は C#**（§10.1 で C/C++ と順序を入れ替えた）。`dotnet` / `git` / `python3` が揃っていれば始められる。

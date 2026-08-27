@@ -280,10 +280,12 @@ C の `static`/`extern` と C# の `namespace`/`type` を汎用概念（`kind` /
 | ファイル | 役割 | 次セッションで読むべきか |
 |---|---|---|
 | **`OPEN_DECISIONS.md`** | 未決事項リスト。E 群がここにある | **必読** |
-| `CODE_ANALYSIS_CONCEPT.md` | フル版の全体構想（**凍結中**） | §1〜§2、§4.1、§9.3 を確認すれば足りる。全部読む必要はない |
-| `EXTRACTABLE_DATA_MATRIX.md` | 言語別「ツールで**取れるか**」（ツールの能力） | 簡易版の実現可能性を詰める段で参照 |
-| `ANALYSIS_VIEWPOINTS.md` | 言語別「その**概念が存在するか**」（言語仕様） | E-1（用途の再定義）で観点カタログとして有用 |
-| `tools/check-env.{sh,ps1}` | 環境確認スクリプト | フル版用。簡易版では要件が変わる |
+| `CODE_ANALYSIS_CONCEPT.md` | **両版の共通土台**（§2.3 の原則 / §3 のスキーマ / §7.3 の層分離 / §7.6 の L0・増分 / §8 のテスト対象） | **必要**。ただし §2.3・§7.3・§7.6 を押さえれば足りる |
+| `ANALYSIS_VIEWPOINTS.md` | 言語別「その**概念が存在するか**」（言語仕様） | L3a のレポート設計で観点カタログとして使う。**ツール非依存なので陳腐化しない** |
+| `tools/measure-*.py` / `emit-generic-schema.py` | 簡易版の実測スクリプト | 数字の出典。再現できる |
+| `full-version/FULL_VERSION_PLAN.md` | 構想 §4.2〜§4.6 / §5 / §6 / §9.3 / §10 | **不要**（フル版専用）。節番号は据え置き |
+| `full-version/EXTRACTABLE_DATA_MATRIX.md` | 言語別「ツールで**取れるか**」（libclang / Roslyn / ts-morph / Jedi） | **不要**。簡易版は tree-sitter 一本 |
+| `tools/full-version/check-env.{sh,ps1}` | 環境確認スクリプト | **不要**。フル版用で、簡易版では要件が変わる |
 
 **フル版に残った宿題**（C 群・D 群）は中断中。E 群の結論が出るまで触らない。
 
