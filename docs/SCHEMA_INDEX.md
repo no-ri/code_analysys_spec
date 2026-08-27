@@ -84,8 +84,8 @@
 | `file` | TEXT。ルートからの相対パス、区切りは `/` に正規化 | NOT NULL | F-5 決定2（`path`→`file` は F-3 決定6） |
 | `lang` | TEXT。**検出した言語名そのまま** ＋ `unknown` | | F-5 → **I-4**（7値では Go/Ruby/sh が丸められる） |
 | `extract_status` | `extracted` / `skipped_no_extractor` / `skipped_binary` / `skipped_ignored` / `failed` | | F-5 決定2 |
-| `bytes` | INT | **⚠ 未定** | F-5（未測定ケースの扱いが J-2 の対象外） |
-| `lines` | INT。物理行数。最終行に改行が無くても1行。空ファイルは 0 | **⚠ 未定** | F-5（同上。`skipped_binary` で行数は無意味） |
+| `bytes` | INT | **NULL = 未測定** | F-5 → **L-1**（J-2 のリストに追加。`skipped_binary` は NULL） |
+| `lines` | INT。物理行数。最終行に改行が無くても1行。空ファイルは 0 | **NULL = 未測定** | F-5 → **L-1**（同上。`skipped_binary` は行数が無意味なので NULL） |
 | `comment_lines` | INT。**コメントだけの行** | **NULL = 未測定** | F-5 → J-2 |
 | `blank_lines` | INT | **NULL = 未測定** | F-5 → J-2 |
 | `parse_errors` | INT。ERROR ノード数 | **NULL = 未測定** | E-3 → F-5 → J-2 |
@@ -114,14 +114,15 @@
 | `root` | TEXT。`repo-name` | NOT NULL | **I-2**（増分 `DELETE` の巻き添えを防ぐ） |
 | `kind` | `file` / `namespace` / `type` / `method` / `function` / `macro` / `variable` / `field` | | §3.1 → **I-5**（`...` を閉じた。初版で出るのは前6つ） |
 | `name` | TEXT | | §3.1 |
-| `qualified_name` | TEXT | **⚠ 未定** | F-1 決定4（残すと決めたが、`kind='file'` の値が未定） |
+| `qualified_name` | TEXT。**`kind='file'` は相対パス** | | F-1 決定4 → **L-2** |
 | `container_id` | TEXT。**常に埋める**。空はファイルシンボル自身のみ | | §3.1 ⛔ E-1 → **G-1 で解決** |
 | `file` | TEXT。**`root` のルートからの相対パス** | NOT NULL | G-3 → **H-2**（解析対象ツリーに限り `files.file` と一致。外部キーではない） |
 | `start_line` | INT | NOT NULL | F-3 決定1 / 決定2 |
 | `start_col` / `end_line` / `end_col` | INT | | F-3 決定1 / 決定2 |
 | 位置の範囲 | **宣言・定義全体**（修飾子・属性を含む先頭から本体の閉じ括弧まで） | | **G-4** |
-| `is_definition` | INT | **⚠ 未定** | F-1 決定4（`kind='file'` / `namespace` の値が未定） |
-| `visibility` | `public` / `module` / `private` / `unknown` | **⚠ 未定** | §3.1.4（`kind='file'` の値が未定） |
+| `is_definition` | INT。**`kind='file'` / `namespace` は 1**（ファイルも名前空間宣言も実在する） | | F-1 決定4 → **L-2 / L-3** |
+| `visibility` | `public` / `module` / `private` / `unknown`。**`kind='file'` は `module`**（ファイルの外から名前で参照されない） | | §3.1.4 → **L-2** |
+| `visibility_source` の `kind='file'` | **`declaration`**（ファイルの存在そのものが宣言） | | **L-5**（L-2 の副作用として判明） |
 | `visibility_source` | `declaration` / `export_list` / `convention` / `linkage` | | §3.1.4, E-1 |
 | `storage_class` | C/C++ のみ。他言語は `not_applicable` | | §3.1.4 |
 | `branch_count` | INT | **NULL = 未測定** | E-1 → F-1 決定4 → J-2 |
@@ -135,7 +136,9 @@
 
 **主キー**: `(file, start_line, start_col, end_line, end_col, kind, extractor, snapshot)` — F-3 決定3
 **統合**: `calls` / `var_refs` /（未採用の）`imports` を1表に — F-1 決定1
-**対象**: 解析対象ツリーのみ — F-5 決定5 → **⚠ `symbols` と違い `root` 列を持たない理由が未記載**
+**対象**: 解析対象ツリーのみ — F-5 決定5
+**`root` 列を持たない理由**: F-5 決定5 により `refs` / `comments` / `files` は**解析対象ツリーだけ**を載せるので `root` は常に一定。
+`symbols` にだけ `root` があるのは、**追加ソースツリーの行が混在するから**（I-2。増分 `DELETE` の巻き添えを防ぐ）— **L-4**
 
 | 列 | 型 / 値域 | NULL | 決定の連鎖 |
 |---|---|---|---|
@@ -177,6 +180,27 @@
 
 ---
 
+## 5.5 `confidence` の決め方（全テーブル）— **L-6 で索引に追加**
+
+値域は `high` / `medium` / `low`（A-2。**数値は採らない**）。**対象は「その行の主張のうち最も弱い判断」**（F-6 決定2、H-3 で「この行が主張する全項目」に拡張）。
+
+| テーブル | `high` | `medium` | `low` |
+|---|---|---|---|
+| `files` | 拡張子で `lang` が一意 | `.h` など複数言語がありうる拡張子 | 内容から推測 |
+| `symbols` | ERROR 無しのファイル、かつ `visibility_source` が `declaration` / `export_list` / `linkage` | `visibility_source = convention`、または**範囲内に ERROR がある** | 範囲内の ERROR が支配的 |
+| `refs`（`resolved`） | フル版の名前解決由来 | **②-a**（閉世界仮定つきの演繹）、`dispatch = macro` | ②-b（**L0 では出さない**） |
+| `refs`（`unresolved`） | `ambiguous` / `needs_type` / `needs_dataflow` | `external` かつリポジトリ内に ERROR を含むファイルがある | `unknown` |
+| `comments` | 明示的な doc 記法（`///` / `/**` / docstring） | 隣接しているだけ | ERROR ノードと同じ行／隣接行 |
+
+**`symbols` の基準行は「範囲全体」**（H-3。`branch_count` が本体由来のため）。F-6 決定4 の「同じ行／隣接行」は H-3 が上書きした。
+
+**②-a の破れ**: 条件コンパイルによる分岐（`dst_id` が複数行にマッチ）と `##` によるマクロ生成は検出でき、`low` に下げる。
+**ビルド除外ファイルの同名定義は検出できない**（軸2 = ゼロの帰結）— F-6 決定5
+
+**`confidence` 単独でフィルタしない。** `WHERE status='resolved' AND confidence='high'` と組にする — F-6 決定3
+
+---
+
 ## 6. L2（`SCHEMA.md` の対象外。一覧のみ）
 
 **置き場所**: `derived/db.sqlite`（L1 を `ATTACH` して作る）— K-4
@@ -185,18 +209,27 @@
 | 導出 | 規則 | 出典 |
 |---|---|---|
 | `symbol_canonical` | 定義1つ＝正規／定義0＝宣言を正規／**定義複数＝畳まず `multiple_definitions`** | F-13③ |
+| ↑ の注意 | **`namespace` と `partial` 型は正常に複数行になる。** `multiple_definitions` は**異常ではなく事実**であり、`#ifdef` の両枝と同じ扱い | **L-7**（L-3 の副作用として判明） |
 | 到達可能性（推移閉包） | 既定は `lambda_depth` を問わず含める。**除いた版との差分**を「コールバック経由でのみ到達する範囲」として示す | K-5 |
 | 名前一致による結線（②-b） | **L0 では線を引かない**。L2 / L3a の「推測モード」 | E-3 |
 
 ---
 
-## 7. 空白セル（`SCHEMA.md` を書く前に埋める）
+## 7. 空白セルの解消（2026-08-27）
 
-| # | 箇所 | 未定の内容 |
+| # | 箇所 | 決定 |
 |---|---|---|
-| **1** | `files.bytes` / `files.lines` | `skipped_binary` のとき行数は無意味。J-2 の NULL 許容リストに入っていない |
-| **2** | `symbols` の `kind='file'` 行 | `qualified_name` / `is_definition` / `visibility` の値が未定 |
-| **3** | `symbols` の `kind='namespace'` 行 | `is_definition` の意味が未定（名前空間に「定義」はあるか） |
-| **4** | `refs` に `root` が無い | `symbols` にだけ `root` を足した（I-2）理由と、`refs` に不要な理由が未記載 |
+| **L-1** | `files.bytes` / `files.lines` | **NULL 許容にする**（J-2 のリストに追加）。`skipped_binary` は両方 NULL |
+| **L-2** | `symbols` の `kind='file'` | `qualified_name` = 相対パス／`is_definition` = 1／`visibility` = `module` |
+| **L-3** | `symbols` の `kind='namespace'` | `is_definition` = 1（C# の名前空間宣言は定義とみなす） |
+| **L-4** | `refs` に `root` が無い | F-5 決定5 により解析対象ツリーだけを載せるので常に一定。**`symbols` にだけ必要な理由**（I-2）を明記 |
 
-**⛔ 矛盾セル: 0 件**（`container_id` の §3.1 ⇔ E-1 は G-1 で解決済み）
+### 更新後の再点検で出たもの（**更新そのものが生んだ**）
+
+| # | 箇所 | 決定 |
+|---|---|---|
+| **L-5** | `symbols.visibility_source` の `kind='file'` | **`declaration`**。L-2 で `visibility` を決めたが**由来を決め忘れていた** |
+| **L-6** | 索引に `confidence` の決め方が無かった | F-6 決定4 の表と H-3 の上書きを **§5.5 として索引に取り込んだ**。値域だけでは `SCHEMA.md` を書けない |
+| **L-7** | `symbol_canonical` の `multiple_definitions` | **`namespace` と `partial` 型は正常に複数行になる。** 異常ではなく事実であることを注記（L-3 で名前空間を `is_definition = 1` にした副作用） |
+
+**⚠ 空白セル: 0 件 ／ ⛔ 矛盾セル: 0 件** — `SCHEMA.md` を書ける状態になった。
