@@ -15,6 +15,20 @@
 > **本文書の位置づけ**: 検討の結果に関わらず、本文書は**「厳密版（フル版）」の設計として有効**。特に §3.1 のスキーマ（`status` / `reason` / `confidence`）と §7.3 の層分離は、簡易版にもそのまま適用できる設計になっている（簡易版の抽出結果は `confidence = low` として同じテーブルに入る）。**捨てるのではなく、上位互換として残す。**
 >
 > 再検討の結果は別文書に起こし、本文書との関係を明記する。
+>
+> ### 追随改訂について（2026-08-26）
+>
+> **凍結は維持したまま、§3.1 / §3.2.1 に追随改訂を入れた。** 簡易版の検討（`OPEN_DECISIONS.md` E-1〜E-4）で、**本文書自身の欠陥が実測により判明した**ため。改訂は「簡易版に合わせる」ためではなく、**フル版単体でも成立していなかった箇所の修正**である。
+>
+> | 改訂 | 理由 | 出典 |
+> |---|---|---|
+> | `linkage` を廃止し `visibility` / `visibility_source` へ | `linkage: internal` は「翻訳単位内」、C# の `internal` は「アセンブリ内」で**同じ語が別概念**。本文書は Phase 1 が C# なのに C 由来の列しか持っていなかった | E-4 |
+> | シンボルIDにシグネチャを含める | C# で **17.7%** のシンボルが ID 衝突で消えた。C++ でも同じ問題が起きる | E-1 発見1 |
+> | `reason` に3値追加 | `external` / `ambiguous` / `needs_type` | E-3 / E-1 |
+> | `comments` テーブルを追加 | doc コメントは名前解決不要で取得でき、一次解析の主要な材料 | E-1 |
+> | 主キーを明記 | `id` 単独では抽出器を変えて再抽出したときに衝突する | E-4 |
+>
+> **改訂しても凍結の理由（インストール要件が重い）は変わらない。** フル版の再開時期は未定のまま。
 
 ---
 
@@ -121,18 +135,23 @@ AI が強いのは「文法規則の生成」「ビジターのボイラープ�
 
 ```
 symbols.csv
-  id              -- 安定シンボルID（§3.2）
-  kind            -- function | variable | type | namespace | ...
-  name            -- 短い名前
-  qualified_name  -- 修飾名
+  id                -- 安定シンボルID（§3.2）
+  kind              -- function | method | type | namespace | macro
+                    -- | variable | field | file | ...
+  name              -- 短い名前
+  qualified_name    -- 修飾名
+  container_id      -- 入れ子の親シンボル。無ければ空（§3.1.4）
   file, line, col, end_line, end_col
-  is_definition   -- 定義か宣言か
-  storage_class   -- static | extern | ...
-  linkage         -- internal | external
-  confidence      -- high | medium | low（§3.1.2）
-  lang            -- c | cpp | py | ts | cs
-  extractor       -- 抽出器の識別子とバージョン
-  snapshot        -- コミットハッシュ等
+  is_definition     -- 定義か宣言か
+  visibility        -- public | module | private | unknown（§3.1.4）
+  visibility_source -- declaration | export_list | convention | linkage（§3.1.4）
+  storage_class     -- static | extern | inline | register | ...
+                    -- ※C/C++ 固有。他言語は not_applicable（§3.1.4）
+  confidence        -- high | medium | low（§3.1.2）
+  lang              -- c | cpp | py | ts | cs
+  extractor         -- 抽出器の識別子とバージョン
+  snapshot          -- コミットハッシュ等
+  --> 主キー: (id, extractor, snapshot)（§3.1.5）
 
 calls.csv
   caller_id
@@ -141,21 +160,35 @@ calls.csv
   status          -- resolved | unresolved | not_applicable | not_extracted
                   -- （§3.1.1）
   reason          -- status = unresolved のときのみ埋める。
-                  -- via_function_pointer | virtual_unresolved
-                  -- | macro_expanded | unknown
+                  -- external | ambiguous | needs_type
+                  -- | via_function_pointer | virtual_unresolved
+                  -- | macro_expanded | unknown          （§3.1.1）
   confidence      -- high | medium | low（§3.1.2）
   call_kind       -- direct | virtual | implicit
+  via_lambda      -- 無名関数の中からの呼び出しか（§3.1.4）
   file, line, col
   lang, extractor, snapshot
+  --> 主キー: (caller_id, file, line, col, extractor, snapshot)（§3.1.5）
 
 var_refs.csv
   func_id
   var_id
   access          -- read | write | readwrite | address_of | unknown
   status          -- resolved | unresolved | not_applicable | not_extracted
-  reason          -- status = unresolved のときのみ
+  reason          -- status = unresolved のときのみ（calls と同じ値域）
   confidence      -- high | medium | low
   file, line, col
+  lang, extractor, snapshot
+
+comments.csv                                    ※2026-08-26 追加（§3.1.6）
+  file, start_line, end_line
+  kind            -- doc | file_header | inline | block
+  source_kind     -- comment | string_literal
+                  -- ※Python の docstring は comment ノードではない
+  attached_id     -- kind = doc のとき、説明対象のシンボルID
+  marker          -- TODO | FIXME | HACK | XXX | NOTE | WARNING | ... | 空
+  text
+  confidence      -- high | medium | low（§3.1.6）
   lang, extractor, snapshot
 ```
 
@@ -166,7 +199,17 @@ var_refs.csv
 | 列 | 問い | 値 |
 |---|---|---|
 | `status` | どの状態か（事実） | `resolved` / `unresolved` / `not_applicable` / `not_extracted` |
-| `reason` | なぜ解決できなかったか（事実） | `via_function_pointer` / `virtual_unresolved` / `macro_expanded` / `unknown` |
+| `reason` | なぜ解決できなかったか（事実） | `external` / `ambiguous` / `needs_type` / `via_function_pointer` / `virtual_unresolved` / `macro_expanded` / `unknown` |
+
+> **`reason` の3値を追加した（2026-08-26）。** 値ごとに「**何を足せば解けるようになるか**」が違う、という軸で分ける。
+>
+> | 値 | 意味 | 何を足せば解けるか |
+> |---|---|---|
+> | `external` | 定義が解析対象の外にある | **解析範囲を広げる** |
+> | `ambiguous` | 対象内の候補が複数あり、名前だけでは決まらない | シグネチャ等の識別子 |
+> | `needs_type` | メンバ呼び出しでレシーバの型が分からない | **型解決** |
+>
+> 追加の根拠は `OPEN_DECISIONS.md` E-3 / E-1。簡易版の実測では C# の呼び出しの **69%** が `needs_type` に落ちた。これを `unknown` に混ぜると最大の分類が「理由不明」になり、「型解決さえあれば解ける」という情報が消える。
 
 `status` の4値は「**解決できた**」「**取れなかった**」「**そもそもその言語に概念が存在しない**」「**まだ調べていない**」を区別する。この3つ（後者3値）は意味が全く違い、混ぜると解析結果を誤読する（`ANALYSIS_VIEWPOINTS.md` §3.3 ④）。
 
@@ -192,6 +235,10 @@ var_refs.csv
 
 Python の `foo()` を Jedi が解決した場合は `status = resolved` かつ `confidence = low` になる。この組み合わせは頻出するはずで、`confidence` が無いと Python と C++ の解決結果が同じ重みで混ざる。
 
+> **訂正（2026-08-26）**: 当初「簡易版（構文解析のみ）の結果は一律 `low`」と考えていたが、**これは誤り**だった。簡易版でも、閉世界仮定の下で候補が一意に定まる解決は**推測ではなく演繹**であり `medium` に相当する（`OPEN_DECISIONS.md` E-3 の ②-a）。
+>
+> したがって **`confidence` でフル版と簡易版を区別することはできない。区別は `extractor` 列で行う**（§3.1.3 がこの列を全テーブルに持たせているのはこのためにも効く）。`confidence` はあくまで「その1行をどれだけ信じてよいか」を表し、どの抽出器が出したかとは独立である。
+
 #### 3.1.3 `lang` / `extractor` / `snapshot` を全テーブルに持たせる理由
 
 §7.4-4「抽出器の識別子とバージョンを記録」は再現性のための全体方針であり、`symbols` だけでは満たせない。
@@ -199,6 +246,67 @@ Python の `foo()` を Jedi が解決した場合は `status = resolved` かつ 
 `symbols` から JOIN で引く案は、**未解決の行**（`callee_id` が空）で対応先が無く、抽出器のバージョンだけを上げて再抽出したケースでも破綻する。冗長を承知で全テーブルに持たせる。
 
 §7.6 の L0 中間ファイルでは、この3列をメタ情報行に1回だけ書き、L1 取り込み時に各行へ展開する。**冗長になるのは L1 のみで、手書きする中間ファイル側は冗長にならない。**
+
+#### 3.1.4 `linkage` を廃止し `visibility` に一本化する理由（2026-08-26 追加）
+
+**当初の `storage_class` / `linkage` は C 由来の列であり、本文書が Phase 1 に選んだ C# を扱えていなかった。**
+
+決定的なのは**同じ語が別の概念を指していた**こと。
+
+| 列 | 値 | 意味 | 粒度 |
+|---|---|---|---|
+| `linkage`（C 由来） | `internal` | 翻訳単位の中でだけ見える（`static`） | **1ファイル** |
+| C# のアクセシビリティ | `internal` | アセンブリの中でだけ見える | **1アセンブリ** |
+
+C# の行に `linkage = 'internal'` と書かれていたら、読み手はほぼ確実に誤読する。
+
+**決定**: 「**名前がどこまで見えるか**」という共通の問いに写した汎用列 `visibility` を正とし、`linkage` は廃止する。C 固有の詳細は `storage_class` に残す。
+
+| 列 | 位置づけ | C | C# |
+|---|---|---|---|
+| **`visibility`** | **汎用。全言語で必ず埋める** | `extern`→`public` / `static`→`module` | `public`→`public` / `internal`→`module` / `private`・`protected`→`private` |
+| **`visibility_source`** | その値がどこから来たか | `linkage` | `declaration` |
+| `storage_class` | 言語固有。C/C++ のみ | `static` / `extern` / `inline` / `register` … | `not_applicable` |
+| ~~`linkage`~~ | **廃止** | | |
+
+`visibility_source` を分けるのは、**visibility の決まり方が言語で3種類ある**ため（簡易版の実測より）。
+
+| 由来 | 例 | `confidence` |
+|---|---|---|
+| `declaration` | C の `static`、C# の `public`、JS の `export const` | `high` |
+| `export_list` | JS の `export { A, B }`、Python の `__all__` | `high`（ただし**宣言箇所とは別の場所を読む**） |
+| `convention` | Python の `_foo`、Go の先頭大文字 | **`medium` / `low`** |
+| `linkage` | C/C++ のリンケージ | `high` |
+
+JS では**同一ファイル内に `declaration` 型と `export_list` 型が混在**していた（commander.js で修飾子型14箇所・リスト型3箇所）。「言語ごとにどちらか」ではなく「同じ言語に両方ある」ため、行ごとに由来を持たせる必要がある。
+
+**`calls.via_lambda` も同じ趣旨**。無名関数（ラムダ／アロー関数）を `symbols` に登録すると **ID を位置ベースにするしかなく、§3.4.2 が退けた「不安定な識別子」になる**。登録せず、`caller_id` は囲む名前つき関数のままにして、「ラムダ内からの呼び出し」であることをフラグで残す。C# で呼び出しの 9.1%、JS で 31.3% が該当する。
+
+#### 3.1.5 主キー（2026-08-26 追加）
+
+**`symbols.id` 単独を主キーにしてはならない。** §3.1.3 の通り抽出器のバージョンだけを上げて再抽出する運用があり、同じシンボルが `extractor` 違いで複数行存在しうる。
+
+| テーブル | 主キー |
+|---|---|
+| `symbols` | `(id, extractor, snapshot)` |
+| `calls` | `(caller_id, file, line, col, extractor, snapshot)` |
+| `var_refs` | `(func_id, var_id, file, line, col, extractor, snapshot)` |
+| `comments` | `(file, start_line, extractor, snapshot)` |
+
+**複数の抽出器の結果を1つの DB に混ぜることは既定としない**（`OPEN_DECISIONS.md` E-4）。ただし主キーは混在に耐える形にしておく。混ぜないという運用判断と、混ざったときに壊れないという設計は別物であり、後者を捨てる理由が無いため。
+
+#### 3.1.6 `comments` テーブル（2026-08-26 追加）
+
+**doc コメントは「この関数が何をするか」を人が書いた唯一の記述であり、名前解決を一切必要としない。** 一次解析では命名の語彙より遥かに直接的な材料になる。実測では定義のうち doc を持つものが cJSON 34.2%、cmark 22.6%、FluentValidation **49.8%**（平均239文字）だった。
+
+**`source_kind` を分ける理由**: **doc の担い手が言語で違う**。C / C# ではコメントだが、**Python の docstring はコメントではなく文字列リテラル**（関数本体の最初の式）で、`comment` ノードには一切現れない（requests では定義の 65.0% が docstring）。本テーブルは「コメント構文」ではなく「**人が書いた説明**」を入れる器として定義する。
+
+**`confidence` の規則**: 「直前のコメントは doc である」は慣習に基づく判断なので、**位置は事実として必ず記録し、シンボルへの紐付けは信頼度つきで別に持つ**（L3a で再計算できる）。
+
+| コメントの形 | `confidence` |
+|---|---|
+| 明示的な doc 記法（C# の `///`、C/C++ の `/**`、Python の docstring） | `high` |
+| 隣接しているだけ（`//` / `/* */`） | `medium` |
 
 ### 3.2 シンボルID
 
@@ -250,6 +358,33 @@ local  <repo-name>  <snapshot>  <descriptor...>
 **要実測（Phase 0）**: descriptor 部分を各言語のネイティブIDから機械的に生成できるか。特に C++ のオーバーロード・テンプレートで descriptor が一意になるか。
 
 > **実測メモ（2026-08-25）**: `pip install libclang` で USR の取得を確認済み。`static void helper(void)` は `c:t.c@F@helper`（ファイル名入り）、`void process(int)` は `c:@F@process` となり、**同名の別物が USR レベルで区別される**ことを確認した。descriptor 生成の入力としては十分な情報がある。
+
+#### 3.2.2 descriptor にシグネチャを含める（2026-08-26 追加・**必須**）
+
+**ステータス: 確定**（実測により §3.2.1 を補強）
+
+`OPEN_DECISIONS.md` E-1 の検証で、**descriptor に名前しか含めないとシンボルが静かに消える**ことが実測された。
+
+| プロジェクト | 生成した symbol | ユニーク ID | **衝突で消える** |
+|---|---:|---:|---:|
+| cJSON（C） | 175 | 171 | 4 件（2.3%） |
+| FluentValidation（C#） | 916 | 754 | **162 件（17.7%）** |
+
+消えたのはすべてオーバーロード（`Matches()` ×6、`LessThan()` ×6 等）。**§2.3 の「静かな取りこぼし」そのもの**であり、図は綺麗に出るのにシンボルの 17.7% が存在しないことになる。
+
+§3.2.1 は「C++ のオーバーロードで要実測」としていたが、**C++ を待たずに C# で顕在化した**。上記の実測メモが確認した USR は同名の別物を区別できるが、**SCIP descriptor 側で区別を落としていた**のが原因である。
+
+**決定**: descriptor に**パラメータの型名リスト**を含める。
+
+```
+local  myrepo  8f3ac21  DefaultValidatorExtensions#Matches(IRuleBuilder,String).
+```
+
+- 型名は**ソースに書いてある**ので取得できる（C# の `var` は引数には現れない）
+- 型注釈が無い言語（Python / JS）は**アリティ（引数の個数）**でフォールバックする
+- **出現順の連番は採らない**。編集で変わるため（§3.4.2 が「ブランチ名は識別子として不安定」を退けたのと同じ理由）
+
+**このIDが安定であることは、簡易版・フル版のどちらにとっても前提**。フル版は libclang の USR を descriptor へ変換する際に、同じ規則を適用すること。
 
 ### 3.3 「解決できなかった」を記録する ★最重要
 
@@ -751,8 +886,8 @@ facts/raw/
 
 ```
 # snapshot=8f3ac21 extractor=libclang-18.1.0 lang=c
-id	kind	name	qualified_name	line	col	end_line	end_col	is_definition	storage_class	linkage	confidence
-c:@F@process#I#	function	process	process	10	1	25	1	true	external	external	high
+id	kind	name	qualified_name	container_id	line	col	end_line	end_col	is_definition	visibility	visibility_source	storage_class	confidence
+local myrepo 8f3ac21 process(int).	function	process	process		10	1	25	1	true	public	linkage	extern	high
 ```
 
 `bar.c.calls.tsv`（`status` が `resolved` の行では `reason` を空にする）:

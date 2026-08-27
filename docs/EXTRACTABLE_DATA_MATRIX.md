@@ -481,7 +481,7 @@ imports:   from_file, to_module, alias, file, line
 |---|---|---|
 | `cpp_layout` | サイズ・アライメント・オフセット・ビットフィールド | C/C++ のみ |
 | `cpp_preproc` | マクロ定義・展開位置・`#ifdef` 条件 | C/C++（+ C# の `#if` は別扱い） |
-| `cpp_linkage` | storage class・linkage・翻訳単位 | C/C++ のみ |
+| `cpp_linkage` | storage class・翻訳単位 | C/C++ のみ。**`linkage` 自体は汎用の `visibility` へ移した**（[構想] §3.1.4、2026-08-26） |
 | `cfg_blocks` / `cfg_edges` | 基本ブロック・エッジ | 実質 C# のみ（C/C++ は LibTooling 導入後） |
 | `dataflow_*` | 到達定義・活性変数 | 実質 C# のみ |
 
