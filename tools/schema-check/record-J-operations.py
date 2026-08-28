@@ -1,6 +1,7 @@
-import sqlite3
+import os, sqlite3
+_HERE=os.path.dirname(os.path.abspath(__file__))
 db=sqlite3.connect(":memory:")
-db.executescript(open('schema_test.py').read().split('db.executescript("""')[1].split('""")')[0])
+db.executescript(open(os.path.join(_HERE,'record-J-reports.py')).read().split('db.executescript("""')[1].split('""")')[0])
 ins="INSERT INTO files VALUES(%s)"%",".join("?"*17)
 
 print("=== 1. 多言語混在: 抽出器を持たない言語のファイル ===")
