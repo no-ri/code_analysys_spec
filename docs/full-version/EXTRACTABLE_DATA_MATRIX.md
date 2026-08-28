@@ -469,7 +469,9 @@ var_refs:  func_id, var_id, access,
 imports:   from_file, to_module, alias, file, line
 ```
 
-> **正はこれではない。** テーブル定義の正本は CODE_ANALYSIS_CONCEPT.md §3.1。本節は「調査結果としてこの形に落ちる」ことを示すための再掲であり、差異が出た場合は §3.1 に従うこと。`imports` は §3.1 の初版テーブルには含まれていない（未決事項。OPEN_DECISIONS.md 参照）。
+> **正はこれではない。** **テーブル定義の正本は `SCHEMA.md`（2026-08-27〜）。** 本節は「調査結果としてこの形に落ちる」ことを示すための**当時の再掲**であり、差異が出た場合は `SCHEMA.md` に従うこと。
+>
+> **`imports` テーブル案は採用しなかった**（F-1 決定1）。`refs.kind = 'import'` として `refs` に統合した — import は呼び出しと同型（`status` / `reason` / `confidence` が要る）で、コンポーネント依存図が両方を同じ `GROUP BY` で畳むため。
 
 `access`（read / write / readwrite）は全言語で表現可能だが、**導出方法と信頼度が言語ごとに異なる**ため、後述の `confidence` 列とセットで扱う。
 
@@ -496,7 +498,7 @@ imports:   from_file, to_module, alias, file, line
 | **`status` / `reason`** | 「解決できたか」と「なぜできなかったか」を分けて記録する（§3.1.1）。Python / JS で特に重要 |
 | **`confidence`** | 同じ `access = 'write'` でも、Python は AST 由来（確実）、C/C++ は自前判定（推定）。信頼度が違うことをデータに残す（§3.1.2） |
 | **`extractor`** | 同じ言語でも Jedi 由来と scip-python 由来で精度が違う |
-| **`config`** | C/C++ と C# の条件コンパイル対応。**C# にも `#if` がある点に注意** |
+| **`config`** | C/C++ と C# の条件コンパイル対応。**C# にも `#if` がある点に注意**。→ **2つに分けた**（F-13②）: **どの構成で解析したか**は実行単位なので `analysis_run.config`、**この行が条件付きの枝の中にあるか**は行単位なので `guard` 列（`symbols` / `refs` / `comments`） |
 
 ### 4.4 覚悟しておくべき非対称性
 
@@ -522,6 +524,10 @@ imports:   from_file, to_module, alias, file, line
    | Python | 再定義、条件付き定義 |
 
    → 「正規シンボル1行 + 宣言箇所の別テーブル」構造は全言語で必要
+
+   > **決定（F-13③）**: **L1 では N 行のまま持ち、正規化は L2 の派生ビュー `symbol_canonical` で行う。**
+   > 正規行を L0 で1つ選ぶには「定義が複数あったらどれか」の規則が要り、それは**判断**なので §7.3 ルール1 に反する。
+   > しかも選ばれなかった方が静かに消え、発見1（17.7% 消失）と同じ失敗になる。
 
 ### 4.5 推奨する着手順の再確認
 
