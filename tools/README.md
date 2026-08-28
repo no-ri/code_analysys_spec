@@ -5,6 +5,9 @@
 
 | ファイル | 対象 | 実行方法 |
 |---|---|---|
+| **`schema-check/verify_schema.py`** | **`SCHEMA.md` の DDL を実行して検証** | `python3 tools/schema-check/verify_schema.py` |
+| **`schema-check/verify_docs.py`** | **文書間の参照が壊れていないか検証** | `python3 tools/schema-check/verify_docs.py` |
+| `schema-check/record-*.py` | J 群 / K 群の実測の出典（使い捨ての記録） | 下記 |
 | `full-version/check-env.sh` | Linux / WSL（**フル版用**） | `bash tools/full-version/check-env.sh [--nuget]` |
 | `full-version/check-env.ps1` | Windows（**フル版用**） | `powershell -ExecutionPolicy Bypass -File tools\full-version\check-env.ps1 [-NuGet]` |
 | `measure-resolvability.py` | 簡易版の検討（E-3） | 下記「解決可能性の測定」 |
@@ -78,3 +81,23 @@ cd ..
 設計検証用の使い捨てであり、実装の雛形ではない。
 既知の未対応（C# の file-scoped namespace、シグネチャ無しの ID 衝突）は
 **問題を可視化するために意図的に残してある**。
+
+
+## スキーマの検証（`schema-check/`）
+
+**2つが正式な検証**で、変更のたびに走らせる。
+
+| スクリプト | 何を保証するか |
+|---|---|
+| `verify_schema.py` | **`SCHEMA.md` から DDL を抜き出して実行**し、文書に書いた性質（主キーの `NOT NULL`、衝突がエラーになること、`attached_line` 込みの結合、`extractor` での絞り込み、5レポートのクエリ、索引との一致）が実際に成り立つか |
+| `verify_docs.py` | 決定ID（232件）と `§N.M` とファイル名の**参照がすべて解決するか**。資料の移動・分割で参照が壊れていないことを機械的に示す |
+
+`record-*.py` は **J 群 / K 群で「決定どおり書いたのに動かない」を見つけたときの記録**であり、
+実装の雛形ではない。数字の出典として残してある。
+
+| スクリプト | 何を見つけたか |
+|---|---|
+| `record-J-reports.py` | `attached_line` を外すと doc 欠落率の結合が 3 行 → 5 行に増殖する（G-8 の裏付け） |
+| `record-J-operations.py` | `extractor=NULL` で主キーが素通しになる（J-1）／`0` が「0件」と「未測定」の両方を指す（J-2）／削除されたファイルの行が残る（J-4） |
+| `record-K-l2-attach.py` | L2 の `symbol_canonical` と推移閉包が書けること／`ATTACH` の挙動（K 群） |
+| `record-K-joins.py` | `id` での JOIN が件数を倍にする／位置の包含なら一意（K-1）／`ATTACH` の二重計上（K-2） |

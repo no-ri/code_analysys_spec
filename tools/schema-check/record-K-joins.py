@@ -1,5 +1,6 @@
+import os
 import sqlite3, os
-DDL=open('round6.py').read().split('DDL = """')[1].split('"""')[0]
+DDL=open(os.path.join(os.path.dirname(os.path.abspath(__file__)),'record-K-l2-attach.py')).read().split('DDL = """')[1].split('"""')[0]
 def mk(path,ext,rows_s,rows_r):
     if os.path.exists(path): os.remove(path)
     d=sqlite3.connect(path); d.executescript(DDL)
