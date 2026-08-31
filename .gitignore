@@ -3,3 +3,4 @@ targets/
 facts.sqlite
 __pycache__/
 *.pyc
+tools/schema-check/*.db
