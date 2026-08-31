@@ -8,7 +8,7 @@ J 群 / K 群で見つかった破綻（NOT NULL の欠落・JOIN の増殖・AT
 import os, re, sqlite3, sys, tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-MD = os.path.join(ROOT, "docs", "SCHEMA.md")
+MD = os.path.join(ROOT, "spec", "SCHEMA.md")
 
 def ddl_from_schema_md():
     body = open(MD, encoding="utf-8").read()
@@ -108,8 +108,9 @@ Q={"R1 概観":"SELECT rtrim(file,replace(file,'/','')) d,COUNT(*) FROM files WH
        WHERE s.is_definition=1 AND s.extractor=? GROUP BY s.file""",
    "R4 コンポーネント依存":"""SELECT rtrim(r.file,replace(r.file,'/','')) d,COUNT(*)
        FROM refs r WHERE r.status='resolved' AND r.extractor=? GROUP BY d""",
-   "R5 解決サマリ":"""SELECT status,COALESCE(reason,'-'),dispatch,confidence,COUNT(*)
-       FROM refs WHERE kind='call' AND extractor=? GROUP BY 1,2,3,4"""}
+   "R5 解決サマリ":"""SELECT status,COALESCE(reason,'-'),dispatch,confidence,
+       COALESCE(resolved_by,'-'),COUNT(*)
+       FROM refs WHERE kind='call' AND extractor=? GROUP BY 1,2,3,4,5"""}
 for k,q in Q.items():
     try: db.execute(q,(E,)).fetchall(); check(k, True)
     except Exception as e: check(k, False, str(e))

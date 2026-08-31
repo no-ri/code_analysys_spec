@@ -34,7 +34,7 @@
 > 誤り 22 件の内訳は**オーバーロードの取り違え 20 件**と **`base.` を自分自身に向けた 2 件**。
 > 決定は4つ——C は現状維持／C# はオーバーロードを `ambiguous` に降格／`base.` は基底から探す／
 > **`refs.resolved_by` 列を追加**（的中率が規則ごとに 25〜100% とばらけたため、`confidence` を規則ごとに決める）。
-> 判定結果は `docs/golden/*.tsv`、再現手順は `tools/sample-golden.py`。結論は `DECISIONS.md`。
+> 判定結果は `spec/golden/*.tsv`、再現手順は `tools/sample-golden.py`。結論は `DECISIONS.md`。
 >
 > **F-16 は「スコープ」に分類されていたが、測った結果「列」の話だった。**
 > 後回しを選んでいたら `resolved_by` は初版に入らず、後から足せばデータの作り直しになっていた。

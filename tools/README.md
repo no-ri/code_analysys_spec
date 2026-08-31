@@ -121,13 +121,13 @@ F-10 / F-11 / F-12 / F-15 はいったん「記述の不整合」として注記
 ```sh
 .venv/bin/python tools/sample-golden.py --lang c      --per-rule 25   # 人が読む形
 .venv/bin/python tools/sample-golden.py --lang csharp --per-rule 20
-.venv/bin/python tools/sample-golden.py --lang c --tsv > docs/golden/cjson-2a-sample.tsv
+.venv/bin/python tools/sample-golden.py --lang c --tsv > spec/golden/cjson-2a-sample.tsv
 ```
 
 **規則ごとに層化抽出する。** 規則によって外し方が違い、全体の的中率より「どの規則が外すか」の方が
 対策に直結するため（規則ごとに `confidence` を分けられる）。単純無作為だと少数の規則が標本に入らない。
 
-判定結果は **`docs/golden/*.tsv`**（J-5 の突合キー `(file, start_line, start_col, kind)` ＋ `verdict`）。
+判定結果は **`spec/golden/*.tsv`**（J-5 の突合キー `(file, start_line, start_col, kind)` ＋ `verdict`）。
 対象コミットは cJSON `fb16e5c` / FluentValidation `daa00b7` に固定。
 
 | 言語 | 標本 | 正 | 的中率 |
