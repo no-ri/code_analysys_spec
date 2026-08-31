@@ -380,9 +380,30 @@ CREATE TABLE comments(
 |---|---|---|---|
 | `files` | 拡張子で `lang` が一意 | `.h` など複数言語がありうる拡張子 | 内容から推測 |
 | `symbols` | ERROR 無しのファイル、かつ `visibility_source` が `declaration` / `export_list` / `linkage` | `visibility_source='convention'`、または**範囲内に ERROR がある** | 範囲内の ERROR が支配的 |
-| `refs`（`resolved`） | 名前解決由来（フル版） | **閉世界仮定つきの演繹**、`dispatch='macro'` | 名前一致の推測（**L0 では出さない**） |
+| `refs`（`resolved`） | 名前解決由来（フル版） | **`resolved_by` ごとに決める**（下表） | 同左 |
 | `refs`（`unresolved`） | `ambiguous` / `needs_type` / `needs_dataflow` | `external` かつリポジトリ内に ERROR を含むファイルがある | `unknown` |
 | `comments` | 明示的な doc 記法（`///` / `/**` / docstring） | 隣接しているだけ | ERROR ノードと同じ行／隣接行 |
+
+#### `refs`（`resolved`）は `resolved_by` ごとに決める — **F-16 決定4（2026-08-31）**
+
+**②-a を一律 `medium` とする割り当ては成立しない。** 的中率を規則ごとに実測したところ
+**25% 〜 100% とばらけた**（`docs/golden/*.tsv`）。到達先だけでは確からしさが決まらず、
+**どうやって到達したかで決まる**。
+
+| `resolved_by` | 実測的中率 | `confidence` |
+|---|---|---|
+| `same_file_static` / `unique_in_repo` | 100%（C 50/50、C# 4/4） | `medium` |
+| `type_name_static` | 95%（19/20） | `medium` |
+| `same_container` | 80%（16/20） | `medium` |
+| **`declared_type`** | **25%（5/20）** | **`low`** |
+| **`self_receiver`** | **0%（2/2、全数）** | **要件7 の修正後に測り直す**（→ 暫定 `low`） |
+| `macro` | 未測定（`dispatch='macro'` は閉世界仮定つきの演繹） | `medium` |
+| `stdlib_dict` | 未測定（`status` は `unresolved` のまま） | `medium` |
+
+**オーバーロードのある呼び出しは `resolved` にしない**（F-16 決定2）。
+`status='unresolved'` / `reason='ambiguous'` に落とす。名前一致では到達先が一意に決まらないため。
+**`confidence` を下げるのではなく `status` を降格する**のが正しい——
+「解決できたがあまり信じられない」ではなく「**解決できていない**」が実態だから。
 
 **`symbols` の基準は範囲全体**（`branch_count` が本体由来のため）。
 

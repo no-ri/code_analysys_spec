@@ -12,9 +12,10 @@ E-1 の帰結文自身が「描くには段階5（型解決）か、少なくと
 解決した呼び出しを src ディレクトリ → dst ディレクトリに畳み、
 コンポーネント間のエッジが何本立つかを数える。結論は `docs/OPEN_DECISIONS.md` F-10。
 
-    .venv/bin/python tools/measure-component-deps.py
+    .venv/bin/python tools/measure-component-deps.py                     # F-10 当時の構成
+    .venv/bin/python tools/measure-component-deps.py --demote-overloads  # F-16 決定2 適用後（初版の構成）
 """
-import glob, os, collections
+import glob, os, sys, collections
 from tree_sitter_language_pack import get_parser
 ROOT="targets/FluentValidation/src/FluentValidation"
 PATS=[ROOT+"/**/*.cs"]
@@ -39,7 +40,7 @@ def comp(path):
     return d if d else "(root)"
 files=files_of(PATS)
 types={}; methods=collections.defaultdict(set); byname=collections.defaultdict(list)
-bases={}; trees={}; mfile={}
+bases={}; trees={}; mfile={}; mloc={}
 for path in files:
     t=P.parse(open(path,"rb").read()); trees[path]=t
     st=[(t.root_node,None)]
@@ -54,7 +55,9 @@ for path in files:
         elif n.type in CS_FUNC:
             nm=n.child_by_field_name("name")
             if nm is not None:
-                if cls: methods[cls].add(txt(nm)); mfile[(cls,txt(nm))]=path
+                if cls:
+                    methods[cls].add(txt(nm)); mfile[(cls,txt(nm))]=path
+                    mloc.setdefault((cls,txt(nm)),[]).append(path)
                 byname[txt(nm)].append((path,cls))
         for c in n.children: st.append((c,cur))
 def owner_of(cls,name,d=0):
@@ -65,6 +68,13 @@ def owner_of(cls,name,d=0):
         r=owner_of(b,name,d+1)
         if r: return r
     return None
+
+# F-16 決定2: オーバーロードのある呼び出しは resolved にしない（ambiguous へ降格）
+#   --demote-overloads を付けると適用する。F-10 の測定は決定2 の前に行われたため、
+#   初版の構成で図が成立するかは、こちらの結果で判断すること。
+DEMOTE_OVERLOADS = "--demote-overloads" in sys.argv
+def n_overload(owner, name):
+    return len(mloc.get((owner, name), []))
 
 edges=collections.Counter(); resolved=0; total=0
 for path in files:
@@ -101,13 +111,13 @@ for path in files:
             if nm is not None: cur=txt(nm)
         if n.type=="invocation_expression":
             total+=1
-            f=n.child_by_field_name("function"); dstf=None
+            f=n.child_by_field_name("function"); dstf=None; _owner=None; _mn=None
             if f is not None and f.type=="identifier":
                 nm=txt(f)
                 if nm in bound: pass                               # 改良D
                 else:
                     o=owner_of(cur,nm)                             # 改良A
-                    if o: dstf=mfile.get((o,nm))
+                    if o: dstf=mfile.get((o,nm)); _owner, _mn = o, nm
                     else:
                         c=byname.get(nm,[])
                         if len(c)==1: dstf=c[0][0]
@@ -115,18 +125,21 @@ for path in files:
                 recv=txt(f).rsplit(".",1)[0]; mn=txt(f).rsplit(".",1)[-1]
                 if recv in ("this","base"):
                     o=owner_of(cur,mn)
-                    if o: dstf=mfile.get((o,mn))
+                    if o: dstf=mfile.get((o,mn)); _owner, _mn = o, mn
                 elif recv in types:
                     o=owner_of(recv,mn)                            # 改良C(static)
-                    if o: dstf=mfile.get((o,mn))
+                    if o: dstf=mfile.get((o,mn)); _owner, _mn = o, mn
                 elif recv in declared:
                     o=owner_of(declared[recv],mn)                  # 改良B
-                    if o: dstf=mfile.get((o,mn))
+                    if o: dstf=mfile.get((o,mn)); _owner, _mn = o, mn
+            if dstf and DEMOTE_OVERLOADS and _owner and n_overload(_owner,_mn)>1:
+                dstf=None   # F-16 決定2: ambiguous へ降格
             if dstf:
                 resolved+=1; edges[(comp(path),comp(dstf))]+=1
         for c in n.children: st.append((c,cur))
 
-print(f"呼び出し {total} 件 / 解決 {resolved} 件 ({resolved*100.0/total:.1f}%)\n")
+print(f"呼び出し {total} 件 / 解決 {resolved} 件 ({resolved*100.0/total:.1f}%)"
+      + ("  [F-16 決定2 適用: オーバーロードは ambiguous へ降格]" if DEMOTE_OVERLOADS else "  [F-10 当時の構成]") + "\n")
 comps=sorted({c for e in edges for c in e})
 print(f"コンポーネント（ディレクトリ）数: {len(comps)}  → {comps}")
 self_e=[e for e in edges if e[0]==e[1]]; cross=[e for e in edges if e[0]!=e[1]]
