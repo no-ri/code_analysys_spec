@@ -75,9 +75,9 @@ check("attached_line 込みなら定義行数と一致", with_line == 3, f"{with
 check("attached_line を外すと増殖する（列が必要な証拠）", without > with_line, f"{without} vs {with_line}")
 
 print("\n5. 位置の包含で src_id / container_id が一意に決まる（§2.5）")
-db.executemany("INSERT INTO refs VALUES(%s)"%",".join("?"*18),
+db.executemany("INSERT INTO refs VALUES(%s)"%",".join("?"*19),
   [("local cJSON . open_port().","local cJSON . free_buf(Buf).","free_buf","call","direct","",0,
-    "src/a.c",4,3,4,20,"resolved",None,"medium","c",E,SNAP)])
+    "src/a.c",4,3,4,20,"resolved",None,"unique_in_repo","medium","c",E,SNAP)])
 n=db.execute("""SELECT COUNT(*) FROM refs r JOIN symbols s
   ON s.file=r.file AND s.extractor=r.extractor AND s.snapshot=r.snapshot
  AND r.start_line BETWEEN s.start_line AND s.end_line WHERE r.extractor=?""",(E,)).fetchone()[0]
@@ -88,9 +88,9 @@ check("dst_id での JOIN は増える（規約が必要な証拠）", n2 > 1, f
 print("\n6. ATTACH しても extractor で絞れば二重計上しない（§2.4）")
 tmp = tempfile.mkdtemp(); fp = os.path.join(tmp,"full.db")
 f = sqlite3.connect(fp); f.executescript(DDL)
-f.execute("INSERT INTO refs VALUES(%s)"%",".join("?"*18),
+f.execute("INSERT INTO refs VALUES(%s)"%",".join("?"*19),
   ("local cJSON . open_port().","local cJSON . free_buf(Buf).","free_buf","call","direct","",0,
-   "src/a.c",4,3,4,20,"resolved",None,"high","c","libclang-18.1.0",SNAP))
+   "src/a.c",4,3,4,20,"resolved",None,"unique_in_repo","high","c","libclang-18.1.0",SNAP))
 f.commit(); f.close()
 db.execute(f"ATTACH DATABASE '{fp}' AS fullv")
 naive = db.execute("SELECT COUNT(*) FROM (SELECT 1 FROM refs UNION ALL SELECT 1 FROM fullv.refs)").fetchone()[0]

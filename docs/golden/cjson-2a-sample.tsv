@@ -1,0 +1,51 @@
+file	start_line	start_col	kind	rule	expr	claimed_dst_file	claimed_dst_line	n_overload	verdict	correct_dst_file	correct_dst_line	note	verdict	correct_dst_file	correct_dst_line	note
+targets/cJSON/cJSON.c	1338	10	call	規則1 同一ファイルの static 優先	print_value	targets/cJSON/cJSON.c	1423	1	正				正			
+targets/cJSON/cJSON.c	1364	12	call	規則1 同一ファイルの static 優先	print_value	targets/cJSON/cJSON.c	1423	1	正				正			
+targets/cJSON/cJSON.c	1613	22	call	規則1 同一ファイルの static 優先	ensure	targets/cJSON/cJSON.c	490	1	正				正			
+targets/cJSON/cJSON.c	1730	9	call	規則1 同一ファイルの static 優先	buffer_skip_whitespace	targets/cJSON/cJSON.c	1090	1	正				正			
+targets/cJSON/cJSON.c	1748	9	call	規則1 同一ファイルの static 優先	buffer_skip_whitespace	targets/cJSON/cJSON.c	1090	1	正				正			
+targets/cJSON/cJSON.c	1854	9	call	規則1 同一ファイルの static 優先	update_offset	targets/cJSON/cJSON.c	576	1	正				正			
+targets/cJSON/cJSON.c	2063	12	call	規則1 同一ファイルの static 優先	add_item_to_array	targets/cJSON/cJSON.c	2027	1	正				正			
+targets/cJSON/cJSON.c	2094	26	call	規則1 同一ファイルの static 優先	cast_away_const	targets/cJSON/cJSON.c	2073	1	正				正			
+targets/cJSON/cJSON.c	2147	12	call	規則1 同一ファイルの static 優先	add_item_to_object	targets/cJSON/cJSON.c	2082	1	正				正			
+targets/cJSON/cJSON.c	2201	9	call	規則1 同一ファイルの static 優先	add_item_to_object	targets/cJSON/cJSON.c	2082	1	正				正			
+targets/cJSON/cJSON.c	2457	12	call	規則1 同一ファイルの static 優先	replace_item_in_object	targets/cJSON/cJSON.c	2427	1	正				正			
+targets/cJSON/cJSON.c	2565	31	call	規則1 同一ファイルの static 優先	cast_away_const	targets/cJSON/cJSON.c	2073	1	正				正			
+targets/cJSON/cJSON.c	2583	19	call	規則1 同一ファイルの static 優先	cJSON_New_Item	targets/cJSON/cJSON.c	241	1	正				正			
+targets/cJSON/cJSON.c	2689	13	call	規則1 同一ファイルの static 優先	suffix_object	targets/cJSON/cJSON.c	1999	1	正				正			
+targets/cJSON/cJSON.c	2813	39	call	規則1 同一ファイルの static 優先	cJSON_strdup	targets/cJSON/cJSON.c	188	1	正				正			
+targets/cJSON/cJSON_Utils.c	322	31	call	規則1 同一ファイルの static 優先	get_array_item	targets/cJSON/cJSON_Utils.c	262	1	正				正			
+targets/cJSON/cJSON_Utils.c	355	12	call	規則1 同一ファイルの static 優先	get_item_from_pointer	targets/cJSON/cJSON_Utils.c	301	1	正				正			
+targets/cJSON/cJSON_Utils.c	638	40	call	規則1 同一ファイルの static 優先	compare_json	targets/cJSON/cJSON_Utils.c	604	1	正				正			
+targets/cJSON/cJSON_Utils.c	656	13	call	規則1 同一ファイルの static 優先	sort_object	targets/cJSON/cJSON_Utils.c	595	1	正				正			
+targets/cJSON/cJSON_Utils.c	943	17	call	規則1 同一ファイルの static 優先	get_object_item	targets/cJSON/cJSON_Utils.c	730	1	正				正			
+targets/cJSON/cJSON_Utils.c	962	22	call	規則1 同一ファイルの static 優先	cJSONUtils_strdup	targets/cJSON/cJSON_Utils.c	66	1	正				正			
+targets/cJSON/cJSON_Utils.c	1150	9	call	規則1 同一ファイルの static 優先	compose_patch	targets/cJSON/cJSON_Utils.c	1096	1	正				正			
+targets/cJSON/cJSON_Utils.c	1159	17	call	規則1 同一ファイルの static 優先	compose_patch	targets/cJSON/cJSON_Utils.c	1096	1	正				正			
+targets/cJSON/cJSON_Utils.c	1166	17	call	規則1 同一ファイルの static 優先	compose_patch	targets/cJSON/cJSON_Utils.c	1096	1	正				正			
+targets/cJSON/cJSON_Utils.c	1452	18	call	規則1 同一ファイルの static 優先	compare_json	targets/cJSON/cJSON_Utils.c	604	1	正				正			
+targets/cJSON/cJSON.c	1229	12	call	規則2 閉世界で候補が一意	cJSON_ParseWithOpts	targets/cJSON/cJSON.c	1131	1	正				正			
+targets/cJSON/cJSON.c	2158	5	call	規則2 閉世界で候補が一意	cJSON_Delete	targets/cJSON/cJSON.c	253	1	正				正			
+targets/cJSON/cJSON.c	2230	5	call	規則2 閉世界で候補が一意	cJSON_Delete	targets/cJSON/cJSON.c	253	1	正				正			
+targets/cJSON/cJSON.c	2236	26	call	規則2 閉世界で候補が一意	cJSON_CreateObject	targets/cJSON/cJSON.c	2609	1	正				正			
+targets/cJSON/cJSON.c	2301	12	call	規則2 閉世界で候補が一意	cJSON_DetachItemViaPointer	targets/cJSON/cJSON.c	2258	1	正				正			
+targets/cJSON/cJSON.c	2313	12	call	規則2 閉世界で候補が一意	cJSON_DetachItemViaPointer	targets/cJSON/cJSON.c	2258	1	正				正			
+targets/cJSON/cJSON.c	2677	13	call	規則2 閉世界で候補が一意	cJSON_CreateNumber	targets/cJSON/cJSON.c	2505	1	正				正			
+targets/cJSON/cJSON.c	2717	13	call	規則2 閉世界で候補が一意	cJSON_CreateNumber	targets/cJSON/cJSON.c	2505	1	正				正			
+targets/cJSON/cJSON.c	2760	13	call	規則2 閉世界で候補が一意	cJSON_Delete	targets/cJSON/cJSON.c	253	1	正				正			
+targets/cJSON/cJSON.c	3137	22	call	規則2 閉世界で候補が一意	cJSON_Compare	targets/cJSON/cJSON.c	3072	1	正				正			
+targets/cJSON/cJSON_Utils.c	324	18	call	規則2 閉世界で候補が一意	cJSON_IsObject	targets/cJSON/cJSON.c	3052	1	正				正			
+targets/cJSON/cJSON_Utils.c	708	9	call	規則2 閉世界で候補が一意	cJSON_AddItemToArray	targets/cJSON/cJSON.c	2061	1	正				正			
+targets/cJSON/cJSON_Utils.c	734	16	call	規則2 閉世界で候補が一意	cJSON_GetObjectItemCaseSensitive	targets/cJSON/cJSON.c	1988	1	正				正			
+targets/cJSON/cJSON_Utils.c	745	10	call	規則2 閉世界で候補が一意	cJSON_IsString	targets/cJSON/cJSON.c	3032	1	正				正			
+targets/cJSON/cJSON_Utils.c	797	9	call	規則2 閉世界で候補が一意	cJSON_free	targets/cJSON/cJSON.c	3202	1	正				正			
+targets/cJSON/cJSON_Utils.c	985	13	call	規則2 閉世界で候補が一意	cJSON_AddItemToArray	targets/cJSON/cJSON.c	2061	1	正				正			
+targets/cJSON/cJSON_Utils.c	1005	14	call	規則2 閉世界で候補が一意	cJSON_IsObject	targets/cJSON/cJSON.c	3052	1	正				正			
+targets/cJSON/cJSON_Utils.c	1032	9	call	規則2 閉世界で候補が一意	cJSON_free	targets/cJSON/cJSON.c	3202	1	正				正			
+targets/cJSON/cJSON_Utils.c	1114	9	call	規則2 閉世界で候補が一意	cJSON_AddItemToObject	targets/cJSON/cJSON.c	2119	1	正				正			
+targets/cJSON/cJSON_Utils.c	1125	46	call	規則2 閉世界で候補が一意	cJSON_CreateString	targets/cJSON/cJSON.c	2531	1	正				正			
+targets/cJSON/cJSON_Utils.c	1126	9	call	規則2 閉世界で候補が一意	cJSON_free	targets/cJSON/cJSON.c	3202	1	正				正			
+targets/cJSON/cJSON_Utils.c	1131	47	call	規則2 閉世界で候補が一意	cJSON_Duplicate	targets/cJSON/cJSON.c	2784	1	正				正			
+targets/cJSON/cJSON_Utils.c	1253	21	call	規則2 閉世界で候補が一意	cJSON_free	targets/cJSON/cJSON.c	3202	1	正				正			
+targets/cJSON/cJSON_Utils.c	1438	13	call	規則2 閉世界で候補が一意	cJSON_AddItemToObject	targets/cJSON/cJSON.c	2119	1	正				正			
+targets/cJSON/cJSON_Utils.c	1455	64	call	規則2 閉世界で候補が一意	cJSONUtils_GenerateMergePatch	targets/cJSON/cJSON_Utils.c	1473	1	正				正			

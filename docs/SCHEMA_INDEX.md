@@ -153,7 +153,8 @@
 | 位置の範囲 | **参照式全体**（`p->f(a,b)` 全体、`#include "x.h"` の行全体） | | **G-4** |
 | `status` | `resolved` / `unresolved` / `not_applicable` / `not_extracted` | | A-1 → **I-3**（後半2値が現れる条件は現時点で無い、と明記） |
 | `reason` | `external` / `ambiguous` / `needs_type` / `needs_dataflow` / `unknown`。`resolved` は**空** | | A-1（4値）→ E-3・E-1（3値追加）→ **F-2**（3値を `dispatch` へ移動、`needs_dataflow` 新設） |
-| `confidence` | `high` / `medium` / `low` | | A-2 → E-4 決定3 → **F-6 決定3**（`unresolved` 行は `reason` の確からしさ。`ambiguous`＝`high`） |
+| `resolved_by` | `same_file_static` / `unique_in_repo` / `same_container` / `declared_type` / `type_name_static` / `self_receiver` / `macro` / `stdlib_dict` / `not_resolved` | | **F-16 決定4**（規則ごとに的中率が 25〜100% とばらけたため。`confidence` はこの値ごとに決める） |
+| `confidence` | `high` / `medium` / `low` | | A-2 → E-4 決定3 → **F-6 決定3**（`unresolved` 行は `reason` の確からしさ。`ambiguous`＝`high`）→ **F-16 決定4**（②-a 一律 `medium` を廃し、`resolved_by` ごとに決める） |
 | `lang` / `extractor` / `snapshot` | | NOT NULL（後2つ） | A-3 |
 
 ---
@@ -189,6 +190,20 @@
 | `files` | 拡張子で `lang` が一意 | `.h` など複数言語がありうる拡張子 | 内容から推測 |
 | `symbols` | ERROR 無しのファイル、かつ `visibility_source` が `declaration` / `export_list` / `linkage` | `visibility_source = convention`、または**範囲内に ERROR がある** | 範囲内の ERROR が支配的 |
 | `refs`（`resolved`） | フル版の名前解決由来 | **②-a**（閉世界仮定つきの演繹）、`dispatch = macro` | ②-b（**L0 では出さない**） |
+
+> **F-16 決定4 による改訂（2026-08-31）**: 上の「②-a はすべて `medium`」は**実測で否定された**。
+> 的中率は規則によって **25% 〜 100%** とばらける。**`confidence` は `resolved_by` ごとに決める。**
+>
+> | `resolved_by` | F-16 の実測的中率 | `confidence` |
+> |---|---|---|
+> | `same_file_static` / `unique_in_repo` | 100%（C 50/50、C# 4/4） | `medium` |
+> | `type_name_static` | 95%（19/20） | `medium` |
+> | `same_container` | 80%（16/20） | `medium` |
+> | `declared_type` | **25%（5/20）** | **`low`** |
+> | `self_receiver` | **0%（2/2、全数）** | **決定3 で実装を修正。修正後に測り直す** |
+>
+> **オーバーロードのある呼び出しは `resolved` にしない**（`unresolved` / `ambiguous`）。
+> 誤りの 22 件中 20 件がオーバーロードの取り違えだったため。
 | `refs`（`unresolved`） | `ambiguous` / `needs_type` / `needs_dataflow` | `external` かつリポジトリ内に ERROR を含むファイルがある | `unknown` |
 | `comments` | 明示的な doc 記法（`///` / `/**` / docstring） | 隣接しているだけ | ERROR ノードと同じ行／隣接行 |
 

@@ -196,6 +196,7 @@ CREATE TABLE refs(
   end_col      INT  NOT NULL,
   status       TEXT,
   reason       TEXT,
+  resolved_by  TEXT,
   confidence   TEXT,
   lang         TEXT,
   extractor    TEXT NOT NULL,
@@ -300,6 +301,7 @@ CREATE TABLE comments(
 | `dispatch` | **どうやって呼ぶか**（事実）。`direct` / `virtual` / `macro` / `function_pointer` / `implicit`。`kind≠'call'` は**空** |
 | `status` | `resolved` / `unresolved` / `not_applicable` / `not_extracted`。**後半2値が現れる条件は現時点で無い** |
 | `reason` | **なぜ解けなかったか**。`external` / `ambiguous` / `needs_type` / `needs_dataflow` / `unknown`。**`resolved` の行は空** |
+| `resolved_by` | **どの規則で解いたか**。`same_file_static` / `unique_in_repo` / `same_container` / `declared_type` / `type_name_static` / `self_receiver` / `macro` / `stdlib_dict` / `not_resolved`。**`confidence` はこの値ごとに決める**（F-16） |
 | `lambda_depth` | 0 = ラムダの外、1 以上 = ネスト深さ。**常に整数** |
 | `guard` | `symbols` と同じ |
 
@@ -312,6 +314,29 @@ CREATE TABLE comments(
 | `needs_type` | 型解決 |
 | `needs_dataflow` | データフロー解析（どの関数が代入されたか） |
 | `unknown` | 不明 |
+
+**`resolved_by` を持つ理由（F-16 の実測）**: ②-a の的中率を規則ごとに測ったところ
+**25% 〜 100% とばらけた**（C# の「レシーバの宣言型」25%、「`this.`/`base.` 経由」0%、C の2規則は 100%）。
+到達先だけでは確からしさが決まらず、**どうやって到達したかで決まる**。
+
+`symbols.visibility_source` とまったく同じ構造である。慣習で決めた `visibility` と宣言で決めた
+`visibility` を同じ確からしさで扱えないのと同じ理由で、`resolved` にも由来が要る。
+
+| `resolved_by` | 意味 | F-16 の実測的中率 |
+|---|---|---|
+| `same_file_static` | 同一ファイルの `static` を優先 | C: 100%（25/25） |
+| `unique_in_repo` | 閉世界で候補が一意 | C: 100%（25/25）／C#: 100%（4/4） |
+| `type_name_static` | レシーバが型名 → static 呼び出し | C#: 95%（19/20） |
+| `same_container` | 同一 container（`this.` 省略） | C#: 80%（16/20） |
+| `declared_type` | レシーバの宣言型から | C#: **25%（5/20）** |
+| `self_receiver` | `this.` / `base.` 経由 | C#: **0%（2/2、全数）** |
+| `macro` | 呼び先のマクロ定義 | 未測定 |
+| `stdlib_dict` | 標準ライブラリ辞書（`status` は `unresolved` のまま） | 未測定 |
+| `not_resolved` | 解けなかった行 | — |
+
+**オーバーロードのある呼び出しは `resolved` にしない**（F-16 決定2）。
+`status='unresolved'` / `reason='ambiguous'` に落とす。名前一致では到達先が一意に決まらないため。
+判定結果は `docs/golden/*.tsv`、再現手順は `tools/sample-golden.py`。
 
 ### 4.5 `comments`
 

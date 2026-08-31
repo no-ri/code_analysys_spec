@@ -17,6 +17,7 @@
 | `measure-count-rules.py` | 数字の食い違いの説明（F-12） | 下記「記述で決めていたことを測り直す」 |
 | `measure-csharp-forecast.py` | 見込みと実測の差の追跡（F-11） | 同上 |
 | `measure-component-deps.py` | レポート4 が C# で成立するか（F-10） | 同上 |
+| `sample-golden.py` | **②-a の的中率を人手検証するための標本抽出（F-16）** | 下記「②-a の的中率の検証」 |
 
 > `check-env.*` は**フル版**用（§9.3）。**2026-08-27 に `tools/full-version/` へ退避した。**`measure-*.py` は**簡易版**の検討で使った測定スクリプトで、
 > 前提が違う（ビルドを一切必要としない）。混同しないこと。
@@ -111,6 +112,34 @@ F-10 / F-11 / F-12 / F-15 はいったん「記述の不整合」として注記
 **F-12 が示した実装上の教訓**: 原因は**3つのスクリプトが同じ判定を別々に書き直していた**こと。
 実装では**判定規則を1箇所に置き、言語ごとに変えるのは集合の中身だけ**にする
 （C# は `{this, base}`、Python は `{self, cls}`、JS は `{this, super}`）。
+
+## ②-a の的中率の検証（F-16、2026-08-31）
+
+②-a は `status = resolved` / `confidence = medium` を名乗るが、**正しい先を指しているかは
+一度も検証されていなかった**。C と C# の両方を標本で検証した。
+
+```sh
+.venv/bin/python tools/sample-golden.py --lang c      --per-rule 25   # 人が読む形
+.venv/bin/python tools/sample-golden.py --lang csharp --per-rule 20
+.venv/bin/python tools/sample-golden.py --lang c --tsv > docs/golden/cjson-2a-sample.tsv
+```
+
+**規則ごとに層化抽出する。** 規則によって外し方が違い、全体の的中率より「どの規則が外すか」の方が
+対策に直結するため（規則ごとに `confidence` を分けられる）。単純無作為だと少数の規則が標本に入らない。
+
+判定結果は **`docs/golden/*.tsv`**（J-5 の突合キー `(file, start_line, start_col, kind)` ＋ `verdict`）。
+対象コミットは cJSON `fb16e5c` / FluentValidation `daa00b7` に固定。
+
+| 言語 | 標本 | 正 | 的中率 |
+|---|---:|---:|---:|
+| **C（cJSON）** | 50 | 50 | **100%** |
+| **C#（FluentValidation）** | 66 | 44 | **66.7%** |
+
+**C# の誤り 22 件のうち 20 件はオーバーロードの取り違え**（`SetValidator` 15件ほか）、
+**2 件は `base.` を自分自身に向けたもの**。結論は `DECISIONS.md` の F-16。
+
+> **注意**: 標本のサイズは規則ごとに 20〜25 件で、**規則Bの 25% は 95% 信頼区間で概ね 9〜49%** と幅が広い。
+> 「規則Bは他より明確に低い」は言えるが、25% という点推定を確定値として扱わないこと。
 
 ## スキーマの検証（`schema-check/`）
 

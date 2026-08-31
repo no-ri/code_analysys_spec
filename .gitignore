@@ -1,3 +1,5 @@
 targets/
 .venv/
 facts.sqlite
+__pycache__/
+*.pyc
